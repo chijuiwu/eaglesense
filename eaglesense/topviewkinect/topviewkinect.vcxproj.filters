@@ -1,0 +1,108 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Source Files\topviewkinect">
+      <UniqueIdentifier>{eadbb9bd-e9f0-455a-a79e-e7e4f3c74796}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\topviewkinect">
+      <UniqueIdentifier>{80eae3cb-dc60-4efe-a7d4-15f8b85fa3d9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\topviewkinect\skeleton">
+      <UniqueIdentifier>{34c60b75-2a1e-469b-8519-f4b92b4a16a4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\topviewkinect\skeleton">
+      <UniqueIdentifier>{3bc24e79-0ff0-4422-86ad-63bbcd3ee25b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\topviewkinect\vision">
+      <UniqueIdentifier>{2e0ae6df-10bf-4902-9e92-79d025eb1289}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\topviewkinect\vision">
+      <UniqueIdentifier>{ac9d28b7-4dff-442d-80ac-6630f1b8b5db}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\stdafx.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\targetver.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\topviewkinect\skeleton\geodesic.h">
+      <Filter>Header Files\topviewkinect\skeleton</Filter>
+    </ClInclude>
+    <ClInclude Include="include\topviewkinect\skeleton\skeleton.h">
+      <Filter>Header Files\topviewkinect\skeleton</Filter>
+    </ClInclude>
+    <ClInclude Include="include\topviewkinect\topviewkinect.h">
+      <Filter>Header Files\topviewkinect</Filter>
+    </ClInclude>
+    <ClInclude Include="include\topviewkinect\vision\classifier.h">
+      <Filter>Header Files\topviewkinect\vision</Filter>
+    </ClInclude>
+    <ClInclude Include="include\topviewkinect\vision\framerate.h">
+      <Filter>Header Files\topviewkinect\vision</Filter>
+    </ClInclude>
+    <ClInclude Include="include\topviewkinect\vision\log.h">
+      <Filter>Header Files\topviewkinect\vision</Filter>
+    </ClInclude>
+    <ClInclude Include="include\topviewkinect\vision\space.h">
+      <Filter>Header Files\topviewkinect\vision</Filter>
+    </ClInclude>
+    <ClInclude Include="include\topviewkinect\vision\parameters.h">
+      <Filter>Header Files\topviewkinect\vision</Filter>
+    </ClInclude>
+    <ClInclude Include="include\topviewkinect\color.h">
+      <Filter>Header Files\topviewkinect</Filter>
+    </ClInclude>
+    <ClInclude Include="include\topviewkinect\kinect2.h">
+      <Filter>Header Files\topviewkinect</Filter>
+    </ClInclude>
+    <ClInclude Include="include\topviewkinect\util.h">
+      <Filter>Header Files\topviewkinect</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="source\stdafx.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="source\skeleton\geodesic.cpp">
+      <Filter>Source Files\topviewkinect\skeleton</Filter>
+    </ClCompile>
+    <ClCompile Include="source\skeleton\skeleton.cpp">
+      <Filter>Source Files\topviewkinect\skeleton</Filter>
+    </ClCompile>
+    <ClCompile Include="source\main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="source\vision\classifier.cpp">
+      <Filter>Source Files\topviewkinect\vision</Filter>
+    </ClCompile>
+    <ClCompile Include="source\vision\framerate.cpp">
+      <Filter>Source Files\topviewkinect\vision</Filter>
+    </ClCompile>
+    <ClCompile Include="source\vision\log.cpp">
+      <Filter>Source Files\topviewkinect\vision</Filter>
+    </ClCompile>
+    <ClCompile Include="source\vision\space.cpp">
+      <Filter>Source Files\topviewkinect\vision</Filter>
+    </ClCompile>
+    <ClCompile Include="topviewkinect.cpp">
+      <Filter>Source Files\topviewkinect</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
+</Project>

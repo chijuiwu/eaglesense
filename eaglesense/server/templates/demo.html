@@ -1,0 +1,29 @@
+{% extends "layout.html" %}
+
+{% block container %}
+<div class="row-fluid">
+    <div class="col-md-8 col-md-offset-2">
+        <div class="panel panel-primary">
+            <!--<div class="panel-heading">-->
+                <!--<h3 class="panel-title">1 minute video</h3>-->
+            <!--</div>-->
+            <div class="panel-body">
+                <div class="embed-responsive embed-responsive-16by9 col-xs-12 text-center">
+                    <iframe width="420" height="345" src="https://www.youtube.com/embed/gh62hRjVj2w">
+                    </iframe>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% end %}
+
+{% block js %}
+
+<script>
+    $(document).ready(function() {
+    });
+</script>
+
+{% end %}

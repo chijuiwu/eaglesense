@@ -1,0 +1,18 @@
+{
+    "tracking": {
+        "framerate": 1,
+        "orientation_recognition": 1,
+        "interaction_recognition": 1,
+        "restful_connection": 0
+    },
+    "interaction_model": "standingtablet-xgboost.model",
+    "restful_server": {
+        "address": "localhost",
+        "port": 5000
+    },
+    "data": {
+        "depth": 1,
+        "infrared": 1,
+        "color": 0
+    }
+}

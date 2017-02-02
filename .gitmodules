@@ -1,0 +1,3 @@
+[submodule "angel/depth/kinect_sensor_node/3rdparty/cpr"]
+	path = angel/depth/kinect_sensor_node/3rdparty/cpr
+	url = git@github.com:whoshuu/cpr.git

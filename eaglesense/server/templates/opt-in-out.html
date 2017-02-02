@@ -1,0 +1,73 @@
+{% extends "layout.html" %}
+
+{% block container %}
+<div class="row-fluid">
+    <div class="col-md-6 col-md-offset-6">
+        <div id="opt-in-out-visualization"></div>
+    </div>
+    <div class="col-md-2">
+        <p>...</p>
+        <!--<p id="server_online" class="hidden text-info"><i class="material-icons">laptop_chromebook</i>&nbsp; Server <i class="fa fa-check"></i></p>-->
+        <!--<p id="server_offline" class="hidden text-danger"><i class="material-icons">laptop_chromebook</i>&nbsp; Server <i class="fa fa-times"></i></p>-->
+        <!--<p id="kinect_online" class="hidden text-info"><i class="material-icons">videocam</i>&nbsp; Kinect <i class="fa fa-check"></i></p>-->
+        <!--<p id="kinect_offline" class="hidden text-danger"><i class="material-icons">people</i>&nbsp; Kinect <i class="fa fa-times"></i></p>-->
+        <!--<p class="text-info"><i class="material-icons">people</i>&nbsp; <span id="num_people">0</span></p>-->
+        <!--<p class="text-info"><i class="material-icons">phone_android</i>&nbsp;<span id="num_phones"> 0</span></p>-->
+        <!--<p class="text-info"><i class="material-icons">tablet_android</i>&nbsp; <span id="num_tablets">0</span></p>-->
+        <!--<div class="panel panel-warning" id="live_information_panel">-->
+            <!--<div class="panel-heading"><i class="fa fa-play fa-fw"></i>&nbsp; Live stream</div>-->
+            <!--<div class="panel-body" id="live_information_body">-->
+                <!--<p id="server_online" class="hidden text-info"><i class="material-icons">laptop_chromebook</i>&nbsp; Server <i class="fa fa-check"></i></p>-->
+                <!--<p id="server_offline" class="hidden text-danger"><i class="material-icons">laptop_chromebook</i>&nbsp; Server <i class="fa fa-times"></i></p>-->
+                <!--<p id="kinect_online" class="hidden text-info"><i class="material-icons">videocam</i>&nbsp; Kinect <i class="fa fa-check"></i></p>-->
+                <!--<p id="kinect_offline" class="hidden text-danger"><i class="material-icons">people</i>&nbsp; Kinect <i class="fa fa-times"></i></p>-->
+                <!--<p class="text-info"><i class="material-icons">people</i>&nbsp; <span id="num_people">0</span></p>-->
+                <!--<p class="text-info"><i class="material-icons">phone_android</i>&nbsp;<span id="num_phones"> 0</span></p>-->
+                <!--<p class="text-info"><i class="material-icons">tablet_android</i>&nbsp; <span id="num_tablets">0</span></p>-->
+                <!--&lt;!&ndash;<p class="text-warning"><i class="material-icons">watch</i>&nbsp; 0</p>&ndash;&gt;-->
+                <!--&lt;!&ndash;<p class="text-warning"><i class="material-icons">toys</i>&nbsp; 0</p>&ndash;&gt;-->
+            <!--</div>-->
+        <!--</div>-->
+    </div>
+    <!--<div class="col-md-4 controls" id="live_information">-->
+        <!--<div class="panel panel-info" id="live_information_panel">-->
+            <!--<div class="panel-heading"><i class="fa fa-play fa-fw"></i>&nbsp; Live stream</div>-->
+            <!--<div class="panel-body" id="live_information_body">-->
+                <!--<p id="server_online" class="hidden text-success"><i class="material-icons">laptop_chromebook</i>&nbsp; Server <i class="fa fa-check"></i></p>-->
+                <!--<p id="server_offline" class="hidden text-danger"><i class="material-icons">laptop_chromebook</i>&nbsp; Server <i class="fa fa-times"></i></p>-->
+                <!--<p id="kinect_online" class="hidden text-success"><i class="material-icons">videocam</i>&nbsp; Kinect <i class="fa fa-check"></i></p>-->
+                <!--<p id="kinect_offline" class="hidden text-danger"><i class="material-icons">people</i>&nbsp; Kinect <i class="fa fa-times"></i></p>-->
+                <!--<p class="text-warning"><i class="material-icons">people</i>&nbsp; <span id="num_people">0</span></p>-->
+                <!--<p class="text-warning"><i class="material-icons">phone_android</i>&nbsp;<span id="num_phones"> 0</span></p>-->
+                <!--<p class="text-warning"><i class="material-icons">tablet_android</i>&nbsp; <span id="num_tablets">0</span></p>-->
+                <!--&lt;!&ndash;<p class="text-warning"><i class="material-icons">watch</i>&nbsp; 0</p>&ndash;&gt;-->
+                <!--&lt;!&ndash;<p class="text-warning"><i class="material-icons">toys</i>&nbsp; 0</p>&ndash;&gt;-->
+            <!--</div>-->
+        <!--</div>-->
+    <!--</div>-->
+</div>
+
+{% end %}
+
+{% block js %}
+
+<script src="{{ static_url('opt-in-out.js') }}"></script>
+
+<script>
+    $(document).ready(function() {
+        var visualization_height = $(window).height() - $("#navbar").height() - 1 - 50;
+        setup_opt_in_out("#opt-in-out-visualization", 512, visualization_height);
+        start_opt_in_out();
+
+        <!--&lt;!&ndash;$("#live_information").height(424);&ndash;&gt;-->
+        <!--&lt;!&ndash;$("#live_information_panel").height(424);&ndash;&gt;-->
+        <!--var visualization_padding_left = parseInt($("#visualization").css("padding-left"));-->
+        <!--var visualization_padding_right = parseInt($("#visualization").css("padding-right"));-->
+        <!--var visualization_width = $("#visualization").outerWidth()-->
+            <!-- - visualization_padding_left-->
+            <!-- - visualization_padding_right;-->
+        <!--var visualization_height = content_height;-->
+    });
+</script>
+
+{% end %}

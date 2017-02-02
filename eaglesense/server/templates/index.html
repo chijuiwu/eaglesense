@@ -1,0 +1,32 @@
+{% extends "layout.html" %}
+
+{% block container %}
+
+<div class="container">
+    <div class="jumbotron" style="padding-top:20px;padding-bottom:20px">
+        <h1>EagleSense</h1><br/><br/>
+        <p>EagleSense is a real-time top-view tracking system designed to be robust, accurate, and portable using off-the-shelf, non-invasive tracking infrastructures. It combines depth and infrared
+            data for human posture and activity recognition. It provides a minimal RESTful API that can be used by proxemic-aware or cross-device systems to detect and localize users and their
+            activities, as well as recognize their uses of devices within an interactive space.</p>
+    </div>
+
+    <div class="row" style="margin-bottom:10px"><div class="col-md-12"><h4><span class="label label-success">Publications</span></h4></div></div>
+
+    <div class="row marketing">
+        <div class="col-md-2">
+            <div class="smallimg">
+                <p><img src="/static/fig1.jpg" alt="EagleSense System"></p>
+            </div>
+        </div>
+        <div class="col-md-10">
+            <p>EagleSense: Real-time Human Posture and Activity Recognition for Interactive Spaces using Top-View Depth-Sensing Cameras</p>
+            <p>Authors: Chi-Jui Wu, Steven Houben, Nicolai Marquardt @ University College London</p>
+        </div>
+    </div>
+</div>
+
+{% end %}
+
+{% block js %}
+
+{% end %}
