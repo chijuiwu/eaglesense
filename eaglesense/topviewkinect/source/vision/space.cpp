@@ -125,6 +125,7 @@ namespace topviewkinect
             try
             {
                 std::string config_filepath = topviewkinect::get_config_filepath();
+                std::cout << config_filepath << std::endl;
                 boost::property_tree::ptree config_root;
                 boost::property_tree::read_json(config_filepath, config_root);
 
@@ -299,10 +300,9 @@ namespace topviewkinect
 
                     if (SUCCEEDED(hr))
                     {
-                        // update time
                         p_depth_frame->get_RelativeTime(&this->kinect_depth_frame_timestamp);
 
-                        // update depth frame
+                        // Update depth frame
                         cv::Mat depth_map(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE, CV_16UC1, p_depth_buffer);
                         double scale = 255.0 / (depth_max_distance - depth_min_distance);
                         depth_map.convertTo(this->depth_frame, CV_8UC1, scale);
@@ -344,7 +344,6 @@ namespace topviewkinect
 
                     if (SUCCEEDED(hr))
                     {
-                        // Update time
                         p_infrared_frame->get_RelativeTime(&this->kinect_infrared_frame_timestamp);
 
                         // Update infrared frame
@@ -391,7 +390,6 @@ namespace topviewkinect
                 }
                 if (SUCCEEDED(hr))
                 {
-                    // Update time
                     hr = p_color_frame->get_RelativeTime(&this->kinect_rgb_frame_timestamp);
 
                     // Update rgb frame
@@ -827,7 +825,7 @@ namespace topviewkinect
 
             // Match skeletons based on center of mass
 
-            std::vector<std::tuple<int, int>> skeleton_matches; // skeleton <skeleton index, contour index>
+            std::vector<std::tuple<int, int>> skeleton_matches; // skeleton <skeleton id, contour index>
             if (this->skeletons.size() <= new_skeleton_contours.size()) // more new skeletons
             {
                 // Match current skeletons
@@ -896,7 +894,7 @@ namespace topviewkinect
                         }
                     }
 
-                    skeleton_matches.push_back(std::make_tuple(this->skeletons[shortest_distance_skeleton_idx].get_id(), new_skeleton_contour_idx)); // Add skeleton match to list
+                    skeleton_matches.push_back(std::make_tuple(this->skeletons[shortest_distance_skeleton_idx].get_id(), new_skeleton_contour_idx));
                     this->skeletons[shortest_distance_skeleton_idx].set_body_center(new_skeleton_center);
                     this->skeletons[shortest_distance_skeleton_idx].set_updated(true);
                 }

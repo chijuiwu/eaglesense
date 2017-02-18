@@ -42,7 +42,17 @@ int main(int argc, char* argv[])
     // Update EagleSense root directory
     std::string args = *argv;
     std::vector<std::string> delimited = topviewkinect::util::string_split(args, '\\');
-    topviewkinect::set_eaglesense_directory(delimited[0] + "/" + delimited[1]);
+    std::ostringstream eaglesense_directory_ss;
+    for (auto i = delimited.begin(); i != delimited.end(); ++i)
+    {
+        std::string dir = *i;
+        eaglesense_directory_ss << dir << "/";
+        if (dir == "eaglesense")
+        {
+            break;
+        }
+    }
+    topviewkinect::set_eaglesense_directory(eaglesense_directory_ss.str());
 
     // Define program options
     boost::program_options::options_description all_opts("Help");

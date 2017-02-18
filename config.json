@@ -5,7 +5,7 @@
         "interaction_recognition": 1,
         "restful_connection": 0
     },
-    "interaction_model": "standingtablet-xgboost.model",
+    "interaction_model": "test.model",
     "restful_server": {
         "address": "localhost",
         "port": 5000
