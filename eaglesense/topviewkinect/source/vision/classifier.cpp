@@ -4,7 +4,7 @@ EagleSense interaction classifier
 
 ===
 EagleSense: Tracking People and Devices in Interactive Spaces using Real-Time Top-View Depth-Sensing
-Copyright © 2016 Chi-Jui Wu
+Copyright ?2016 Chi-Jui Wu
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
@@ -15,11 +15,6 @@ You should have received a copy of the GNU General Public License along with thi
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/ndarrayobject.h>
-
-static void* init_numpy() {
-    import_array();
-    return NULL;
-}
 
 #include <sstream>
 #include <iostream>
@@ -34,22 +29,19 @@ namespace topviewkinect
     namespace vision
     {
         InteractionClassifier::InteractionClassifier() :
-            p_classifier(NULL),
-            p_predict_func(NULL)
+            xgb(NULL),
+            booster(NULL),
+            booster_predict_func(NULL),
+            dmatrix_class(NULL)
         {
         }
 
         InteractionClassifier::~InteractionClassifier()
         {
-            Py_XDECREF(this->p_classifier);
-            if (this->p_classifier != NULL)
-            {
-                Py_DECREF(this->p_classifier);
-            }
-            if (this->p_predict_func != NULL)
-            {
-                Py_DECREF(this->p_predict_func);
-            }
+            Py_DECREF(xgb);
+            Py_DECREF(booster);
+            Py_DECREF(dmatrix_class);
+            Py_DECREF(booster_predict_func);
             Py_Finalize();
         }
 
@@ -61,148 +53,117 @@ namespace topviewkinect
             topviewkinect::util::log_println("Initializing Python...");
 
             Py_Initialize();
-            init_numpy();
-            PyRun_SimpleString("import sys");
+            import_array();
 
-            std::ostringstream path_ss;
-            path_ss << "sys.path.append(\"" << topviewkinect::EAGLESENSE_DIRECTORY << "\")";
-            PyRun_SimpleString(path_ss.str().c_str());
-
-            // Import classifier module
-            topviewkinect::util::log_println("Initializing classifier...");
-
-            PyObject* p_module = PyImport_ImportModule("classifier");
-            if (p_module == NULL)
+            this->xgb = PyImport_ImportModule("xgboost"); // import xgboost as xgb
+            if (!this->xgb)
             {
-                PyErr_Print();
-                topviewkinect::util::log_println("Failed to load the classifier module.");
-                return false;
+                topviewkinect::util::log_println("Failed to import xgboost!!");
             }
 
-            PyObject* p_classifier_class = PyObject_GetAttrString(p_module, "TopviewInteractionClassifier");
-            if (p_classifier_class == NULL)
+            PyObject* booster_class = PyObject_GetAttrString(this->xgb, "Booster"); // booster = xgb.Booster(model_file=model_file)
+            PyObject* model_file = PyUnicode_FromString(topviewkinect::get_model_filepath(model).c_str());
+            this->booster = PyObject_CallFunctionObjArgs(booster_class, NULL, NULL, model_file, NULL);
+            if (!this->booster)
             {
-                PyErr_Print();
-                topviewkinect::util::log_println("Failed to load the classifier class.");
-                return false;
-            }
-            Py_DECREF(p_module);
-
-            this->p_classifier = PyObject_CallObject(p_classifier_class, NULL);
-            if (this->p_classifier == NULL)
-            {
-                PyErr_Print();
-                topviewkinect::util::log_println("Failed to create a classifier object.");
-                return false;
-            }
-            Py_DECREF(p_classifier_class);
-
-            // Load machine learning model
-            topviewkinect::util::log_println("Loading model...");
-
-            std::string path_to_model = topviewkinect::get_model_filepath(model);
-            PyObject* p_load_args = Py_BuildValue("(s)", path_to_model.c_str());
-            PyObject* p_load = PyObject_GetAttrString(this->p_classifier, "load");
-            PyObject* p_result = PyObject_CallObject(p_load, p_load_args);
-            if (p_result == NULL)
-            {
-                PyErr_Print();
-                topviewkinect::util::log_println("Failed to call the classifier `load` function.");
-                return false;
-            }
-            Py_DECREF(p_load_args);
-            Py_DECREF(p_load);
-            Py_DECREF(p_result);
-
-            // Load predict function
-            topviewkinect::util::log_println("Loading 'predict' function...");
-
-            this->p_predict_func = PyObject_GetAttrString(this->p_classifier, "predict");
-            if (!PyCallable_Check(this->p_predict_func))
-            {
-                PyErr_Print();
-                topviewkinect::util::log_println("Failed to load the classifier `predict` function.");
-                return false;
+                topviewkinect::util::log_println("Failed to load Booster!!");
             }
 
+            this->booster_predict_func = PyObject_GetAttrString(this->booster, "predict"); // booster.predict
+            if (!this->booster)
+            {
+                topviewkinect::util::log_println("Failed to load 'predict' function!!");
+            }
+
+            this->dmatrix_class = PyObject_GetAttrString(this->xgb, "DMatrix"); // xgb.DMatrix
+            if (!this->booster)
+            {
+                topviewkinect::util::log_println("Failed to load 'DMatrix' structure !!");
+            }
+
+            Py_DECREF(booster_class);
+            Py_DECREF(model_file);
             return true;
         }
 
         bool InteractionClassifier::recognize_interactions(std::vector<topviewkinect::skeleton::Skeleton>& skeletons) const
         {
-            if (this->p_predict_func == NULL)
-            {
-                topviewkinect::util::log_println("The classifier `predict` function was not initialized.");
-                return false;
-            }
-
-            // Create C++ 2D array
-            size_t num_skeletons = 0;
-            for (const topviewkinect::skeleton::Skeleton& skeleton : skeletons)
-            {
-                if (skeleton.is_activity_tracked())
-                {
-                    ++num_skeletons;
-                }
-            }
+            const int num_skeletons = static_cast<int>(std::count_if(skeletons.begin(), skeletons.end(), [](const topviewkinect::skeleton::Skeleton& skeleton) { return skeleton.is_activity_tracked(); }));
             if (num_skeletons == 0)
             {
                 return false;
             }
 
-            double* c_array = new double[num_skeletons * topviewkinect::vision::NUM_TOTAL_FEATURES];
-            int skeleton_counter = 0;
+            // Create C 2D array
+            const int nrow = num_skeletons;
+            const int ncol = topviewkinect::vision::NUM_TOTAL_FEATURES;
+            double** X_c_array = new double*[nrow];
+            for (int i = 0; i < nrow; ++i)
+            {
+                X_c_array[i] = new double[ncol];
+            }
+
+            int nth_row = 0;
             for (const topviewkinect::skeleton::Skeleton& skeleton : skeletons)
             {
                 if (skeleton.is_activity_tracked())
                 {
                     std::array<double, topviewkinect::vision::NUM_TOTAL_FEATURES> skeleton_features = skeleton.get_features();
-                    std::copy(skeleton_features.begin(), skeleton_features.end(), c_array + skeleton_counter * topviewkinect::vision::NUM_TOTAL_FEATURES);
-                    ++skeleton_counter;
+                    std::copy(std::begin(skeleton_features), std::end(skeleton_features), X_c_array[nth_row++]);
                 }
             }
 
-            // Create numpy arrays
-            const int nd = 2;
-            npy_intp dims[nd]{ static_cast<int>(num_skeletons), topviewkinect::vision::NUM_TOTAL_FEATURES };
-            PyObject* p_array = PyArray_SimpleNewFromData(nd, dims, NPY_FLOAT64, reinterpret_cast<void*>(c_array));
-            if (p_array == NULL)
+            for (int i = 0; i < nrow; ++i)
+                for (int j = 0; j < ncol; ++j)
+                    std::cout << X_c_array[i][j] << ",";
+            std::cout << std::endl;
+
+            // Create NumPy 2D Array
+            const int dimension = 2;
+            npy_intp shape[dimension] = { nrow, ncol };
+            PyObject* X_p_array = PyArray_SimpleNewFromData(dimension, shape, NPY_DOUBLE, reinterpret_cast<void*>(X_c_array));
+            if (!X_p_array)
             {
-                PyErr_Print();
-                topviewkinect::util::log_println("Failed to construct numpy array.");
-                return false;
+                topviewkinect::util::log_println("Failed to construct X Python Array!!");
+            }
+            PyArrayObject* X_np_array = reinterpret_cast<PyArrayObject*>(X_p_array);
+            if (!X_np_array)
+            {
+                topviewkinect::util::log_println("Failed to construct X NumPy Array!!");
             }
 
-            // Call predict function via Python C++ API
-            PyObject* p_return = PyObject_CallFunctionObjArgs(this->p_predict_func, p_array, NULL);
-            if (p_return == NULL)
+            PyObject* X_dmatrix = PyObject_CallFunctionObjArgs(this->dmatrix_class, X_np_array, NULL); // X_DMatrix = xgb.DMatrix(X)
+            if (!X_dmatrix)
             {
-                PyErr_Print();
-                topviewkinect::util::log_println("Failed to call the classifier `predict` function.");
-                return false;
+                topviewkinect::util::log_println("Failed to construct X DMatrix!!");
             }
-            Py_DECREF(p_array);
 
-            // Convert results back to C++ array
-            PyArrayObject *np_ret = reinterpret_cast<PyArrayObject*>(p_return);
-            int* c_out = reinterpret_cast<int*>(PyArray_DATA(np_ret));
-            Py_DECREF(p_return);
+            // Predict
+            PyObject* y = PyObject_CallFunctionObjArgs(this->booster_predict_func, X_dmatrix, NULL); // y = booster.predict(X_DMatrix)
+            if (!y)
+            {
+                topviewkinect::util::log_println("Failed to call predict function!!");
+            }
+            PyArrayObject* y_np_array = reinterpret_cast<PyArrayObject*>(y);
+            float* y_c_array = reinterpret_cast<float*>(PyArray_DATA(y_np_array));
 
-            // Update skeleton activity
-            skeleton_counter = 0;
+            int skeleton_idx = 0;
             for (topviewkinect::skeleton::Skeleton& skeleton : skeletons)
             {
                 if (skeleton.is_activity_tracked())
                 {
-                    int activity_id = c_out[skeleton_counter];
-                    skeleton.set_activity_id(activity_id);
-                    skeleton.set_activity(this->interactions[activity_id]);
-                    ++skeleton_counter;
+                    int activity_idx = static_cast<int>(y_c_array[skeleton_idx++]);
+                    skeleton.set_activity_id(activity_idx);
+                    skeleton.set_activity(this->interactions[activity_idx]);
                 }
             }
 
             // Clean up
-            delete[] c_array;
+            Py_DECREF(X_np_array);
+            Py_DECREF(X_dmatrix);
+            Py_DECREF(y);
+
+            delete[] X_c_array;
 
             return true;
         }

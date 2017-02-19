@@ -43,16 +43,18 @@ int main(int argc, char* argv[])
     std::string args = *argv;
     std::vector<std::string> delimited = topviewkinect::util::string_split(args, '\\');
     std::ostringstream eaglesense_directory_ss;
-    for (auto i = delimited.begin(); i != delimited.end(); ++i)
+    for (auto dir = delimited.begin(); dir != delimited.end(); ++dir)
     {
-        std::string dir = *i;
-        eaglesense_directory_ss << dir << "/";
-        if (dir == "eaglesense")
+        eaglesense_directory_ss << *dir;
+        if (*dir == "eaglesense")
         {
             break;
         }
+        eaglesense_directory_ss << "/";
     }
+
     topviewkinect::set_eaglesense_directory(eaglesense_directory_ss.str());
+    std::cout << eaglesense_directory_ss.str() << std::endl;
 
     // Define program options
     boost::program_options::options_description all_opts("Help");

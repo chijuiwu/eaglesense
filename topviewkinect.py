@@ -18,10 +18,7 @@ import eaglesense as es
 
 
 def main():
-    # Get program arguments
     args_list = sys.argv[1:]
-
-    # Run EagleSense topviewkinect
     topviewkinect_process = [es.config.TOPVIEWKINECT_EXE]
     topviewkinect_process.extend(args_list)
     subprocess.call(topviewkinect_process)

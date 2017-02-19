@@ -27,8 +27,10 @@ namespace topviewkinect
         {
         private:
             std::vector<std::string> interactions;
-            PyObject* p_classifier;
-            PyObject* p_predict_func;
+            PyObject* xgb;
+            PyObject* booster;
+            PyObject* booster_predict_func;
+            PyObject* dmatrix_class;
 
         public:
             InteractionClassifier();

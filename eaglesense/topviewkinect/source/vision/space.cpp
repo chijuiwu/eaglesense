@@ -121,13 +121,10 @@ namespace topviewkinect
         {
             topviewkinect::util::log_println("Initializing...");
 
-            // Load EagleSense configuration (from local `config.json` file)
             try
             {
-                std::string config_filepath = topviewkinect::get_config_filepath();
-                std::cout << config_filepath << std::endl;
                 boost::property_tree::ptree config_root;
-                boost::property_tree::read_json(config_filepath, config_root);
+                boost::property_tree::read_json(topviewkinect::get_config_filepath(), config_root);
 
                 this->configuration.framerate = config_root.get<int>("tracking.framerate", 0) == 1;
                 this->configuration.orientation_recognition = config_root.get<int>("tracking.orientation_recognition", 0) == 1;
@@ -176,7 +173,7 @@ namespace topviewkinect
                 this->restful_client = new web::http::client::http_client(url_builder.to_uri());
             }
 
-            // Initialize Kinect
+            // Kinect
             HRESULT hr;
             hr = GetDefaultKinectSensor(&this->kinect_sensor);
             if (FAILED(hr) || !this->kinect_sensor)
@@ -446,7 +443,7 @@ namespace topviewkinect
 
         bool TopViewSpace::load_dataset(const int dataset_id)
         {
-            topviewkinect::util::log_println("Loading dataset " + std::to_string(dataset_id) + "...");
+            topviewkinect::util::log_println("Loading Dataset " + std::to_string(dataset_id) + "...");
 
             this->interaction_log.initialize(dataset_id);
             bool dataset_loaded = this->interaction_log.load_directories();
@@ -472,7 +469,7 @@ namespace topviewkinect
             cv::Mat infrared_frame = cv::imread(std::get<1>(next_frames.second), CV_LOAD_IMAGE_GRAYSCALE);
             this->apply_kinect_multisource_frame(next_frames.first, depth_frame, infrared_frame);
 
-            topviewkinect::util::log_println("Dataset " + std::to_string(dataset_id) + " (size: " + std::to_string(dataset_frames.size()) + ") Loaded.");
+            topviewkinect::util::log_println("Dataset " + std::to_string(dataset_id) + " (Size: " + std::to_string(dataset_frames.size()) + ") Loaded.");
             return true;
         }
 
