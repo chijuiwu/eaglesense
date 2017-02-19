@@ -100,12 +100,12 @@ eaglesense/
 ### C++ Requirements
 * [Microsoft Visual Studio 2015 (v140) with VC++](https://www.visualstudio.com/)
 * [Microsoft Kinect SDK 2.0](https://developer.microsoft.com/en-us/windows/kinect)
-* [OpenCV >= 3.1.0 (prebuilt Windows binaries)](http://opencv.org/)
-* [C++ Boost >= 1.60.0 (prebuilt Windows binaries)](http://www.boost.org/)
-* [C++ REST SDK >= 2.8 (via Visual Studio NuGet Package Manager)](https://github.com/Microsoft/cpprestsdk/)
+* [OpenCV 3.1.0+ (prebuilt Windows binaries)](http://opencv.org/)
+* [C++ Boost 1.60.0+ (prebuilt Windows binaries)](http://www.boost.org/)
+* [C++ REST SDK 2.8+ (via Visual Studio NuGet Package Manager)](https://github.com/Microsoft/cpprestsdk/)
 
 ### Python Requirements
-* [Python >= 3.4](https://www.python.org/) (Python 3.4 recommended)
+* [Python 3](https://www.python.org/) (Preferably Anaconda)
 * [XGBoost latest](https://xgboost.readthedocs.io/en/latest/) (see below)
 * [numpy](http://www.numpy.org/)
 * [scipy](https://www.scipy.org/)
@@ -115,46 +115,15 @@ eaglesense/
 * [seaborn](https://stanford.edu/~mwaskom/software/seaborn/)
 * [tornado](https://github.com/tornadoweb/tornado)
 
-### XGBoost
+### XGBoost (Windows)
 
-**NOTE: This was tested on Windows x64 with Python 3.4.4.**
+1. Install Anaconda with Python 3 x64
 
-1. Prerequisites
-	* [Python 3.4](https://www.python.org/downloads/)
-		> Add `/path/to/python` and `/path/to/python/Scripts` to `PATH`.
+2. Download XGBoost Windows x64 dll and follow this [guide](http://www.picnet.com.au/blogs/guido/post/2016/09/22/xgboost-windows-x64-binaries-for-download/)
 
-		> Update pip: `python -m pip install --upgrade pip`.
+3. Install XGBoost
 
-	* [Numpy and Scipy](http://www.lfd.uci.edu/~gohlke/pythonlibs/)
-		> Install `numpy+mkl` and `scipy`.
-
-	* [MinGW; MinGW64 recommended](https://sourceforge.net/projects/mingw-w64/)
-		> Choose x86_64 architecture and win32 threads.
-
-		> Add `/path/to/mingw64/bin` to `PATH`.
-
-2. Git Bash
-
-	```bash
-	# Download XGBOOST latest
-	cd /some/root/directory/
-	git clone --recursive https://github.com/dmlc/xgboost
-	cd xgboost/
-	git submodule init
-	git submodule update
-
-	# Build XGBOOST from source
-	cp make/mingw64.mk config.mk
-	mingw32-make -j4
-
-	# Install the python package
-	cd python-package/
-	python setup.py install
-	```
-
-3. If the above method doesn't work, you might want to try other resources such as [Google](https://www.google.com) or [this blog post](http://dnc1994.com/2016/03/installing-xgboost-on-windows/).
-
-### Theano and Keras (**Currently NOT required**)
+### Keras, Theano, and TensorFlow
 
 ---
 
@@ -194,7 +163,7 @@ eaglesense/
 		> `$(OPENCV3)\build\x64\vc14\lib;$(BOOSTCPP)\lib64-msvc-14.0;$(PYTHON3)\libs;$(PYTHON3)\Lib\site-packages\numpy\core\lib;%(AdditionalLibraryDirectories)`
 
     * Linker --> Input --> Additional Dependencies
-		> `opencv_world310.lib;kinect20.lib;python34.lib;_tkinter.lib;npymath.lib;%(AdditionalDependencies)`
+		> `opencv_world310.lib;kinect20.lib;python[VERSION].lib;_tkinter.lib;npymath.lib;%(AdditionalDependencies)`
 
 6. Click `Build` then `Build solution`.
 
