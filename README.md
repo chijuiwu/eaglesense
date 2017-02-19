@@ -66,19 +66,19 @@ Feel free to also fork and hack.
 
 ## INSTALL
 
-1. Install [Git](https://git-scm.com/)
-	> Optionally [Git Desktop](https://desktop.github.com/)
+### Preliminaries
 
-2. Git Bash
+1. Install [Git](https://git-scm.com/) ([Git Desktop](https://desktop.github.com/) recommended)
+
+2. `git clone` EagleSense
 
 	```bash
-	cd /your/workspace/
+	cd /your_workspace/
 	git clone https://github.com/cjw-charleswu/eaglesense
 	```
 
 ### Project structure
-
-```
+```bash
 eaglesense/
     +-- data/
     ¦   +-- topviewkinect/
@@ -91,37 +91,41 @@ eaglesense/
 	+-- models/
 	+-- config.json
 	+-- setup.py
-	+-- classifier.py
 	+-- server.py
 	+-- topviewkinect.py
+	+-- requirements.txt
 	+-- README.md
 ```
 
-### C++ Requirements
-* [Microsoft Visual Studio 2015 (v140) with VC++](https://www.visualstudio.com/)
-* [Microsoft Kinect SDK 2.0](https://developer.microsoft.com/en-us/windows/kinect)
-* [OpenCV 3.1.0+ (prebuilt Windows binaries)](http://opencv.org/)
-* [C++ Boost 1.60.0+ (prebuilt Windows binaries)](http://www.boost.org/)
-* [C++ REST SDK 2.8+ (via Visual Studio NuGet Package Manager)](https://github.com/Microsoft/cpprestsdk/)
+### Requirements
+* C++
+	* [Microsoft Visual Studio 2015 (v140) with VC++](https://www.visualstudio.com/)
+	* [Microsoft Kinect SDK 2.0](https://developer.microsoft.com/en-us/windows/kinect)
+	* [OpenCV 3.1.0+ (prebuilt Windows binaries)](http://opencv.org/)
+	* [C++ Boost 1.60.0+ (prebuilt Windows binaries)](http://www.boost.org/)
+	* [C++ REST SDK 2.8+ (via Visual Studio NuGet Package Manager)](https://github.com/Microsoft/cpprestsdk/)
 
-### Python Requirements
-* [Python 3](https://www.python.org/) (Preferably Anaconda)
-* [XGBoost latest](https://xgboost.readthedocs.io/en/latest/) (see below)
-* [numpy](http://www.numpy.org/)
-* [scipy](https://www.scipy.org/)
-* [scikit-learn](http://scikit-learn.org/stable/)
-* [pandas](http://pandas.pydata.org/)
-* [matplotlib](http://matplotlib.org/)
-* [seaborn](https://stanford.edu/~mwaskom/software/seaborn/)
-* [tornado](https://github.com/tornadoweb/tornado)
+
+* Python (See `requirements.txt`)
+	* [Python 3](https://www.python.org/) ([Anaconda](https://www.continuum.io/downloads) recommended)
+	* [XGBoost](https://xgboost.readthedocs.io/en/latest/) (See below)
+	* [numpy](http://www.numpy.org/)
+	* [scipy](https://www.scipy.org/)
+	* [scikit-learn](http://scikit-learn.org/stable/)
+	* [pandas](http://pandas.pydata.org/)
+	* [matplotlib](http://matplotlib.org/)
+	* [seaborn](https://stanford.edu/~mwaskom/software/seaborn/)
+	* [tornado](https://github.com/tornadoweb/tornado)
 
 ### XGBoost (Windows)
 
 1. Install Anaconda with Python 3 x64
 
-2. Download XGBoost Windows x64 dll and follow this [guide](http://www.picnet.com.au/blogs/guido/post/2016/09/22/xgboost-windows-x64-binaries-for-download/)
+2. Follow this [installation guide](http://www.picnet.com.au/blogs/guido/post/2016/09/22/xgboost-windows-x64-binaries-for-download/) (Download the XGBoost dll and install the Python package).
 
-3. Install XGBoost
+*Tested on Windows 10 with Python 3.6 x64. The Anaconda distribution will contain most of the Python requirements.*
+
+See also the official XGBoost [installation guide](https://xgboost.readthedocs.io/en/latest/build.html).
 
 ### Keras, Theano, and TensorFlow
 
@@ -136,12 +140,13 @@ eaglesense/
 	python setup.py
 	```
 
-### Top-view tracking system
+### Tracking
 
 1. Set the following system environment variables.
-    * **`PYTHON3`** : `/path/to/python3`
-    * **`BOOSTCPP`** : `/path/to/boost`
-    * **`OPENCV3`** : `/path/to/opencv3`
+    * **PYTHON3** : `/path/to/python3` (or `path/to/anaconda`)
+    * **BOOSTCPP** : `/path/to/boost`
+    * **OPENCV3** : `path/to/opencv3`
+
 
 2. Add `/path/to/opencv/build/x64/vc14/bin` to `PATH`.
 
@@ -149,7 +154,7 @@ eaglesense/
 
 4. Set solution configuration to `Release x64`.
 
-5. In solution explorer, right click on the `topviewkinect` project then select `Properties`. Include the following fields as needed.
+5. In the solution explorer, right click the `topviewkinect` project then select `Properties`. Include the following fields as needed.
     * VC++ Directories --> Include Directories
 		> `$(KINECTSDK20_DIR)\inc;$(VC_IncludePath);$(WindowsSDK_IncludePath);`
 
@@ -165,13 +170,15 @@ eaglesense/
     * Linker --> Input --> Additional Dependencies
 		> `opencv_world310.lib;kinect20.lib;python[VERSION].lib;_tkinter.lib;npymath.lib;%(AdditionalDependencies)`
 
-6. Click `Build` then `Build solution`.
+		*where [VERSION] is the Python version without the dot, e.g. for Python 3.6 [VERSION] would be **36***
+
+6. Click `Build` then `Build solution` (CTRL + SHIFT + B).
 
 ---
 
 ## RUN
 
-### Top-view tracking system
+### Tracking
 
 1. Configure the *EagleSense* top-view tracking system via `config.json` in the *EagleSense* root directory.
 
@@ -224,7 +231,7 @@ eaglesense/
 	  -n [ --dataset_name ] arg (=Untitled) Dataset name
 	```
 
-### Web server
+### RESTful Server
 
 1. Run
 
