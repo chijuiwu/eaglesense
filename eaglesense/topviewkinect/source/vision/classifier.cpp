@@ -38,18 +38,17 @@ namespace topviewkinect
 
         InteractionClassifier::~InteractionClassifier()
         {
-            Py_DECREF(xgb);
-            Py_DECREF(booster);
-            Py_DECREF(dmatrix_class);
-            Py_DECREF(booster_predict_func);
+            Py_XDECREF(this->xgb);
+            Py_XDECREF(this->booster);
+            Py_XDECREF(this->dmatrix_class);
+            Py_XDECREF(this->booster_predict_func);
             Py_Finalize();
         }
 
         bool InteractionClassifier::initialize(const std::string& model, const std::vector<std::string>& interactions)
         {
             this->interactions = interactions;
-
-            // Initialize Python
+            
             topviewkinect::util::log_println("Initializing Python...");
 
             Py_Initialize();
@@ -66,13 +65,13 @@ namespace topviewkinect
             this->booster = PyObject_CallFunctionObjArgs(booster_class, NULL, NULL, model_file, NULL);
             if (!this->booster)
             {
-                topviewkinect::util::log_println("Failed to load Booster!!");
+                topviewkinect::util::log_println("Failed to load Booster !!");
             }
 
             this->booster_predict_func = PyObject_GetAttrString(this->booster, "predict"); // booster.predict
             if (!this->booster)
             {
-                topviewkinect::util::log_println("Failed to load 'predict' function!!");
+                topviewkinect::util::log_println("Failed to load 'predict' function !!");
             }
 
             this->dmatrix_class = PyObject_GetAttrString(this->xgb, "DMatrix"); // xgb.DMatrix
@@ -81,8 +80,15 @@ namespace topviewkinect
                 topviewkinect::util::log_println("Failed to load 'DMatrix' structure !!");
             }
 
+            Py_INCREF(this->xgb);
+            Py_INCREF(this->booster);
+            Py_INCREF(this->dmatrix_class);
+            Py_INCREF(this->booster_predict_func);
+
             Py_DECREF(booster_class);
             Py_DECREF(model_file);
+
+            topviewkinect::util::log_println("... Python initialized");
             return true;
         }
 
@@ -124,25 +130,25 @@ namespace topviewkinect
             PyObject* X_p_array = PyArray_SimpleNewFromData(dimension, shape, NPY_DOUBLE, reinterpret_cast<void*>(X_c_array));
             if (!X_p_array)
             {
-                topviewkinect::util::log_println("Failed to construct X Python Array!!");
+                topviewkinect::util::log_println("Failed to construct X Python Array !!");
             }
             PyArrayObject* X_np_array = reinterpret_cast<PyArrayObject*>(X_p_array);
             if (!X_np_array)
             {
-                topviewkinect::util::log_println("Failed to construct X NumPy Array!!");
+                topviewkinect::util::log_println("Failed to construct X NumPy Array !!");
             }
 
             PyObject* X_dmatrix = PyObject_CallFunctionObjArgs(this->dmatrix_class, X_np_array, NULL); // X_DMatrix = xgb.DMatrix(X)
             if (!X_dmatrix)
             {
-                topviewkinect::util::log_println("Failed to construct X DMatrix!!");
+                topviewkinect::util::log_println("Failed to construct X DMatrix !!");
             }
 
             // Predict
             PyObject* y = PyObject_CallFunctionObjArgs(this->booster_predict_func, X_dmatrix, NULL); // y = booster.predict(X_DMatrix)
             if (!y)
             {
-                topviewkinect::util::log_println("Failed to call predict function!!");
+                topviewkinect::util::log_println("Failed to call predict function !!");
             }
             PyArrayObject* y_np_array = reinterpret_cast<PyArrayObject*>(y);
             float* y_c_array = reinterpret_cast<float*>(PyArray_DATA(y_np_array));

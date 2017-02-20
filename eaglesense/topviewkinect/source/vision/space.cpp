@@ -469,7 +469,7 @@ namespace topviewkinect
             cv::Mat infrared_frame = cv::imread(std::get<1>(next_frames.second), CV_LOAD_IMAGE_GRAYSCALE);
             this->apply_kinect_multisource_frame(next_frames.first, depth_frame, infrared_frame);
 
-            topviewkinect::util::log_println("Dataset " + std::to_string(dataset_id) + " (Size: " + std::to_string(dataset_frames.size()) + ") Loaded.");
+            topviewkinect::util::log_println("- Dataset " + std::to_string(dataset_id) + " (Size: " + std::to_string(dataset_frames.size()) + ") Loaded.");
             return true;
         }
 
@@ -559,7 +559,7 @@ namespace topviewkinect
                 if (++current_frame_idx % progressbar_step == 0)
                 {
                     int progress = boost::math::iround(static_cast<float>(current_frame_idx) / num_total_frames * 100);
-                    topviewkinect::util::log_println("Frame " + std::to_string(this->kinect_frame_id) + " (" + std::to_string(progress) + "%)");
+                    topviewkinect::util::log_println("... Frame " + std::to_string(this->kinect_frame_id) + " (" + std::to_string(progress) + "%)");
                 }
             }
 

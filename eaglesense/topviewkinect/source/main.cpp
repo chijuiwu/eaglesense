@@ -52,9 +52,7 @@ int main(int argc, char* argv[])
         }
         eaglesense_directory_ss << "/";
     }
-
     topviewkinect::set_eaglesense_directory(eaglesense_directory_ss.str());
-    std::cout << eaglesense_directory_ss.str() << std::endl;
 
     // Define program options
     boost::program_options::options_description all_opts("Help");
@@ -145,7 +143,7 @@ int main(int argc, char* argv[])
 
 static int start()
 {
-    topviewkinect::util::log_println("Tracking!!!");
+    topviewkinect::util::log_println("Tracking ...");
 
     // Create interactive space
     topviewkinect::vision::TopViewSpace m_space;
@@ -177,20 +175,20 @@ static int start()
         }
     }
 
-    topviewkinect::util::log_println("Done!!!");
+    topviewkinect::util::log_println("Done!");
     return EXIT_SUCCESS;
 }
 
 static int replay(const int dataset_id)
 {
-    topviewkinect::util::log_println("Replaying!!!");
+    topviewkinect::util::log_println("Replaying ...");
 
     // Create interactive space
     topviewkinect::vision::TopViewSpace m_space;
     bool space_initialized = m_space.initialize();
     if (!space_initialized)
     {
-        topviewkinect::util::log_println("Failed. Exiting...");
+        topviewkinect::util::log_println("Failed. Exiting ...");
         return EXIT_FAILURE;
     }
 
@@ -198,7 +196,7 @@ static int replay(const int dataset_id)
     bool dataset_loaded = m_space.load_dataset(dataset_id);
     if (!dataset_loaded)
     {
-        topviewkinect::util::log_println("Failed. Exiting...");
+        topviewkinect::util::log_println("Failed. Exiting ...");
         return EXIT_FAILURE;
     }
 
@@ -233,20 +231,20 @@ static int replay(const int dataset_id)
         }
     }
 
-    topviewkinect::util::log_println("Done!!!");
+    topviewkinect::util::log_println("Done!");
     return EXIT_SUCCESS;
 }
 
 static int capture(const int dataset_id)
 {
-    topviewkinect::util::log_println("Capturing!!!");
+    topviewkinect::util::log_println("Capturing ...");
 
     // Create interactive space
     topviewkinect::vision::TopViewSpace m_space;
     bool space_initialized = m_space.initialize();
     if (!space_initialized)
     {
-        topviewkinect::util::log_println("Failed. Exiting...");
+        topviewkinect::util::log_println("Failed. Exiting ...");
         return EXIT_FAILURE;
     }
 
@@ -254,7 +252,7 @@ static int capture(const int dataset_id)
     bool dataset_created = m_space.create_dataset(dataset_id);
     if (!dataset_created)
     {
-        topviewkinect::util::log_println("Failed. Exiting...");
+        topviewkinect::util::log_println("Failed. Exiting ...");
         return EXIT_FAILURE;
     }
 
@@ -279,14 +277,15 @@ static int capture(const int dataset_id)
         }
     }
 
-    topviewkinect::util::log_println("Done!!!");
+    topviewkinect::util::log_println("Done!");
     return EXIT_SUCCESS;
 }
 
 static int postprocess(const int dataset_id, const std::string& dataset_name, const bool relabel)
 {
-    topviewkinect::util::log_println("Postprocessing!!!");
-    !relabel ? topviewkinect::util::log_println("**Features Only**") : 0;
+    std::string info;
+    !relabel ? info = "**Features Only**" : 0;
+    topviewkinect::util::log_println("Postprocessing ... " + info);
 
     // Create interactive space
     topviewkinect::vision::TopViewSpace m_space;
@@ -296,13 +295,13 @@ static int postprocess(const int dataset_id, const std::string& dataset_name, co
     bool dataset_loaded = m_space.load_dataset(dataset_id);
     if (!dataset_loaded)
     {
-        topviewkinect::util::log_println("Failed. Exiting...");
+        topviewkinect::util::log_println("Failed. Exiting ...");
         return EXIT_FAILURE;
     }
 
     // Postprocess
     m_space.postprocess(dataset_name, relabel);
 
-    topviewkinect::util::log_println("Done!!!");
+    topviewkinect::util::log_println("Done!");
     return EXIT_SUCCESS;
 }
