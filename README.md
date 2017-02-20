@@ -28,9 +28,9 @@
 }
 ```
 
-**Click image below for video.**
+**CLICK IMAGE BELOW TO SEE [VIDEO](https://youtu.be/6QLHA7hC_Kc).**
 
-[![EagleSense](https://github.com/cjw-charleswu/eaglesense/blob/master/screenshots/video.png)](https://www.youtube.com/watch?v=6QLHA7hC_Kc "EagleSense")
+[![EagleSense](https://github.com/cjw-charleswu/eaglesense/blob/master/screenshots/video.png)](https://youtu.be/6QLHA7hC_Kc "EagleSense")
 
 ## PUBLICATIONS
 
@@ -51,16 +51,18 @@ You should have received a copy of the GNU General Public License along with thi
 
 ## CURRENTLY WORKING ON
 
-Code refactor and machine learning pipeline.
+Refactor the source code and machine learning pipeline.
 
 ## CONTRIBUTING
 
-Contact chi-jui.wu.15 [at] ucl.ac.uk if you are interested in working on the following for *EagleSense*:
+Contact me via [email](mailto:chijui@chijuiwu.space) if you are interested in working on:
 
 - Machine learning (deep neural nets)
 - Interaction techniques (design and studies)
 
-Feel free to also fork and hack.
+Or if you have any question about this project.
+
+**Feel free to fork and hack.**
 
 ---
 
@@ -140,12 +142,12 @@ See also the official XGBoost [installation guide](https://xgboost.readthedocs.i
 	python setup.py
 	```
 
-### Tracking
+### Tracking System
 
 1. Set the following system environment variables.
     * **PYTHON3** : `/path/to/python3` (or `path/to/anaconda`)
     * **BOOSTCPP** : `/path/to/boost`
-    * **OPENCV3** : `path/to/opencv3`
+    * **OPENCV3** : `/path/to/opencv3`
 
 
 2. Add `/path/to/opencv/build/x64/vc14/bin` to `PATH`.
@@ -178,7 +180,7 @@ See also the official XGBoost [installation guide](https://xgboost.readthedocs.i
 
 ## RUN
 
-### Tracking
+### Tracking System
 
 1. Configure the *EagleSense* top-view tracking system via `config.json` in the *EagleSense* root directory.
 
