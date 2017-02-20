@@ -121,7 +121,7 @@ eaglesense/
 
 ### XGBoost (Windows)
 
-1. Install Anaconda with Python 3 x64
+1. Install [Anaconda](https://www.continuum.io/downloads) with Python 3 x64
 
 2. Follow this [installation guide](http://www.picnet.com.au/blogs/guido/post/2016/09/22/xgboost-windows-x64-binaries-for-download/) (Download the XGBoost dll and install the Python package).
 
