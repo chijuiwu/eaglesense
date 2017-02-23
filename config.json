@@ -5,7 +5,7 @@
         "interaction_recognition": 1,
         "restful_connection": 0
     },
-    "interaction_model": "init_cs.model",
+    "interaction_model": "initial_cs.model",
     "restful_server": {
         "address": "localhost",
         "port": 5000
