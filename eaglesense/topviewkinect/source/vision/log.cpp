@@ -283,7 +283,7 @@ namespace topviewkinect
                 // Features
                 if (skeleton.is_activity_tracked())
                 {
-                    const std::array<double, topviewkinect::vision::NUM_TOTAL_FEATURES> skeleton_features = skeleton.get_features();
+                    const std::array<double, topviewkinect::vision::NUM_FEATURES> skeleton_features = skeleton.get_features();
 
                     this->features_csv << frame_id << "," << skeleton.get_id() << "," << head.x << "," << head.y << "," << head.z << ",";
                     for (size_t i = 0; i < skeleton_features.size(); ++i)

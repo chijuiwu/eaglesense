@@ -48,7 +48,7 @@ namespace topviewkinect
         bool InteractionClassifier::initialize(const std::string& model, const std::vector<std::string>& interactions)
         {
             this->interactions = interactions;
-            
+
             topviewkinect::util::log_println("Initializing Python...");
 
             Py_Initialize();
@@ -60,12 +60,19 @@ namespace topviewkinect
                 topviewkinect::util::log_println("Failed to import xgboost!!");
             }
 
-            PyObject* booster_class = PyObject_GetAttrString(this->xgb, "Booster"); // booster = xgb.Booster(model_file=model_file)
-            PyObject* model_file = PyUnicode_FromString(topviewkinect::get_model_filepath(model).c_str());
-            this->booster = PyObject_CallFunctionObjArgs(booster_class, NULL, NULL, model_file, NULL);
+            PyObject* booster_class = PyObject_GetAttrString(this->xgb, "Booster"); // booster = xgb.Booster()
+            this->booster = PyObject_CallFunctionObjArgs(booster_class, NULL);
             if (!this->booster)
             {
                 topviewkinect::util::log_println("Failed to load Booster !!");
+            }
+
+            PyObject* booster_load_model_func = PyObject_GetAttrString(this->booster, "load_model"); // booster.load_model(fnmae)
+            PyObject* model_fname = PyUnicode_FromString(topviewkinect::get_model_filepath(model).c_str());
+            PyObject* booster_load_model_result = PyObject_CallFunctionObjArgs(booster_load_model_func, model_fname, NULL);
+            if (!booster_load_model_result)
+            {
+                topviewkinect::util::log_println("Failed to load model !!");
             }
 
             this->booster_predict_func = PyObject_GetAttrString(this->booster, "predict"); // booster.predict
@@ -86,7 +93,9 @@ namespace topviewkinect
             Py_INCREF(this->booster_predict_func);
 
             Py_DECREF(booster_class);
-            Py_DECREF(model_file);
+            Py_DECREF(model_fname);
+            Py_DECREF(booster_load_model_func);
+            Py_DECREF(booster_load_model_result);
 
             topviewkinect::util::log_println("... Python initialized");
             return true;
@@ -101,37 +110,33 @@ namespace topviewkinect
             }
 
             // Create C 2D array
-            const int nrow = num_skeletons;
-            const int ncol = topviewkinect::vision::NUM_TOTAL_FEATURES;
-            double** X_c_array = new double*[nrow];
-            for (int i = 0; i < nrow; ++i)
-            {
-                X_c_array[i] = new double[ncol];
-            }
-
-            int nth_row = 0;
+            double* X_c_array = new double[num_skeletons * topviewkinect::vision::NUM_FEATURES];
+            int nth_skeleton = 0;
             for (const topviewkinect::skeleton::Skeleton& skeleton : skeletons)
             {
                 if (skeleton.is_activity_tracked())
                 {
-                    std::array<double, topviewkinect::vision::NUM_TOTAL_FEATURES> skeleton_features = skeleton.get_features();
-                    std::copy(std::begin(skeleton_features), std::end(skeleton_features), X_c_array[nth_row++]);
+                    std::array<double, topviewkinect::vision::NUM_FEATURES> skeleton_features = skeleton.get_features();
+                    std::copy(skeleton_features.begin(), skeleton_features.end(), X_c_array + nth_skeleton * topviewkinect::vision::NUM_FEATURES);
+                    ++nth_skeleton;
                 }
             }
 
-            for (int i = 0; i < nrow; ++i)
-                for (int j = 0; j < ncol; ++j)
-                    std::cout << X_c_array[i][j] << ",";
-            std::cout << std::endl;
-
             // Create NumPy 2D Array
+            const int nrow = num_skeletons;
+            const int ncol = topviewkinect::vision::NUM_FEATURES;
             const int dimension = 2;
             npy_intp shape[dimension] = { nrow, ncol };
-            PyObject* X_p_array = PyArray_SimpleNewFromData(dimension, shape, NPY_DOUBLE, reinterpret_cast<void*>(X_c_array));
+            PyObject* X_p_array = PyArray_SimpleNewFromData(dimension, shape, NPY_FLOAT64, reinterpret_cast<void*>(X_c_array));
             if (!X_p_array)
             {
                 topviewkinect::util::log_println("Failed to construct X Python Array !!");
             }
+
+            PyArrayObject* test = reinterpret_cast<PyArrayObject*>(X_p_array);
+            double* test_array = reinterpret_cast<double*>(PyArray_DATA(test));
+
+
             PyArrayObject* X_np_array = reinterpret_cast<PyArrayObject*>(X_p_array);
             if (!X_np_array)
             {
@@ -151,14 +156,15 @@ namespace topviewkinect
                 topviewkinect::util::log_println("Failed to call predict function !!");
             }
             PyArrayObject* y_np_array = reinterpret_cast<PyArrayObject*>(y);
-            float* y_c_array = reinterpret_cast<float*>(PyArray_DATA(y_np_array));
+            int* y_c_array = reinterpret_cast<int*>(PyArray_DATA(y_np_array));
 
             int skeleton_idx = 0;
             for (topviewkinect::skeleton::Skeleton& skeleton : skeletons)
             {
                 if (skeleton.is_activity_tracked())
                 {
-                    int activity_idx = static_cast<int>(y_c_array[skeleton_idx++]);
+                    std::cout << "y: " << y_c_array[skeleton_idx] << std::endl;
+                    int activity_idx = y_c_array[skeleton_idx++];
                     skeleton.set_activity_id(activity_idx);
                     skeleton.set_activity(this->interactions[activity_idx]);
                 }

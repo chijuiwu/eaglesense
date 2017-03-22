@@ -123,7 +123,7 @@ namespace topviewkinect
             const std::vector<cv::Point> get_others_contour() const;
             void set_others_contour(const std::vector<cv::Point>& contour);
 
-            const std::array<double, topviewkinect::vision::NUM_TOTAL_FEATURES> get_features() const;
+            const std::array<double, topviewkinect::vision::NUM_FEATURES> get_features() const;
             void set_features(const std::array<double, topviewkinect::vision::FEATURE_NUM_LAYER_AREAS>& f_layer_areas, const std::array<double, topviewkinect::vision::FEATURE_NUM_LAYER_CONTOURS>& f_layer_contours, const std::array<double, topviewkinect::vision::FEATURE_NUM_LAYER_DISTANCES>& f_layer_distances, const std::array<double, topviewkinect::vision::FEATURE_NUM_INTRALAYER_POSITIONS>& f_intralayer_positions, const std::array<double, topviewkinect::vision::FEATURE_NUM_INTERLAYER_POSITIONS>& f_interlayer_positions, const std::array<double, topviewkinect::vision::FEATURE_NUM_BODY_EXTREMITIES>& f_body_extremities, const std::array<double, topviewkinect::vision::FEATURE_NUM_BODY_EXTREMITIES_INFRAREDS>& f_body_extremities_infrareds);
 
             // Visualizations

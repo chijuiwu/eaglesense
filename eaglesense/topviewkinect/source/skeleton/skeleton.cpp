@@ -218,9 +218,9 @@ namespace topviewkinect
             m.copyTo(this->silhouette_others_layer);
         }
 
-        const std::array<double, topviewkinect::vision::NUM_TOTAL_FEATURES> Skeleton::get_features() const
+        const std::array<double, topviewkinect::vision::NUM_FEATURES> Skeleton::get_features() const
         {
-            std::array<double, topviewkinect::vision::NUM_TOTAL_FEATURES> skeleton_features{};
+            std::array<double, topviewkinect::vision::NUM_FEATURES> skeleton_features{};
             int feature_idx = 0;
             for (int i = 0; i < topviewkinect::vision::FEATURE_NUM_LAYER_AREAS; ++i)
             {

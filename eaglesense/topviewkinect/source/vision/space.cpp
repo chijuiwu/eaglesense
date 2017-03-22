@@ -147,12 +147,7 @@ namespace topviewkinect
 
             // Activity and device recognition
             std::vector<std::string> interactions{
-                "standing",
-                "sitting",
-                "pointing",
-                "phone",
-                "tablet",
-                "paper"
+                "standing", "sitting", "pointing", "phone", "tablet", "paper"
             };
             if (this->configuration.interaction_recognition)
             {
@@ -469,7 +464,7 @@ namespace topviewkinect
             cv::Mat infrared_frame = cv::imread(std::get<1>(next_frames.second), CV_LOAD_IMAGE_GRAYSCALE);
             this->apply_kinect_multisource_frame(next_frames.first, depth_frame, infrared_frame);
 
-            topviewkinect::util::log_println("- Dataset " + std::to_string(dataset_id) + " (Size: " + std::to_string(dataset_frames.size()) + ") Loaded.");
+            topviewkinect::util::log_println("Dataset " + std::to_string(dataset_id) + " (Size: " + std::to_string(dataset_frames.size()) + ") Loaded.");
             return true;
         }
 
@@ -664,7 +659,7 @@ namespace topviewkinect
                         cv::circle(this->visualization_frame, head_pt, 3, topviewkinect::color::CV_BGR_BLACK, -1);
 
                         // Orientation
-                        if (skeleton.is_activity_tracked())
+                        if (this->configuration.orientation_recognition && skeleton.is_activity_tracked())
                         {
                             int head_angle_pt_x = boost::math::iround(skeleton_head.x + 25 * std::cos(skeleton_head.orientation * CV_PI / 180.0));
                             int head_angle_pt_y = boost::math::iround(skeleton_head.y + 25 * std::sin(skeleton_head.orientation * CV_PI / 180.0));
