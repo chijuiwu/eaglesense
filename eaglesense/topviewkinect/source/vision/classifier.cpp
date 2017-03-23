@@ -133,10 +133,6 @@ namespace topviewkinect
                 topviewkinect::util::log_println("Failed to construct X Python Array !!");
             }
 
-            PyArrayObject* test = reinterpret_cast<PyArrayObject*>(X_p_array);
-            double* test_array = reinterpret_cast<double*>(PyArray_DATA(test));
-
-
             PyArrayObject* X_np_array = reinterpret_cast<PyArrayObject*>(X_p_array);
             if (!X_np_array)
             {
@@ -156,15 +152,14 @@ namespace topviewkinect
                 topviewkinect::util::log_println("Failed to call predict function !!");
             }
             PyArrayObject* y_np_array = reinterpret_cast<PyArrayObject*>(y);
-            int* y_c_array = reinterpret_cast<int*>(PyArray_DATA(y_np_array));
+            float* y_c_array = reinterpret_cast<float*>(PyArray_DATA(y_np_array));
 
             int skeleton_idx = 0;
             for (topviewkinect::skeleton::Skeleton& skeleton : skeletons)
             {
                 if (skeleton.is_activity_tracked())
                 {
-                    std::cout << "y: " << y_c_array[skeleton_idx] << std::endl;
-                    int activity_idx = y_c_array[skeleton_idx++];
+                    int activity_idx = static_cast<int>(y_c_array[skeleton_idx++]);
                     skeleton.set_activity_id(activity_idx);
                     skeleton.set_activity(this->interactions[activity_idx]);
                 }
