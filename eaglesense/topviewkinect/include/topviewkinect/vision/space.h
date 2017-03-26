@@ -109,6 +109,7 @@ namespace topviewkinect
             // Capture
             bool create_dataset(const int dataset_id);
             bool save_kinect_frames();
+            bool save_visualization();
 
             // Postprocess
             void postprocess(const std::string& dataset_name, const bool relabel);

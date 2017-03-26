@@ -74,6 +74,7 @@ namespace topviewkinect
             // Capture
             bool create_directories();
             void save_multisource_frames(signed long long depth_frame_timestamp, const cv::Mat& depth_frame, signed long long infrared_frame_timestamp = -1, const cv::Mat& infrared_frame = cv::Mat(), const cv::Mat& low_infrared_frame = cv::Mat(), signed long long rgb_frame_timestamp = -1, const cv::Mat& rgb_frame = cv::Mat());
+            void save_visualization(const int frame_id, const cv::Mat& visualization_frame);
 
             // Postprocess
             void create_postprocessed_files(const bool relabel);

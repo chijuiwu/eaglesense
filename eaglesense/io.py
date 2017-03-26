@@ -25,16 +25,16 @@ def create_data_directories():
     Create project directories
     """
 
-    if not os.path.exists(config.DATA_DIR):
-        os.makedirs(config.DATA_DIR)
+    if not os.path.exists(config.DATA_DNAME):
+        os.makedirs(config.DATA_DNAME)
 
-    if not os.path.exists(config.TOPVIEWKINECT_DATA_DIR):
-        os.makedirs(config.TOPVIEWKINECT_DATA_DIR)
+    if not os.path.exists(config.TOPVIEWKINECT_DATA_DNAME):
+        os.makedirs(config.TOPVIEWKINECT_DATA_DNAME)
 
 
 def get_data():
     data_list = list()
-    for dataset_id in next(os.walk(config.TOPVIEWKINECT_DATA_DIR))[1]:
+    for dataset_id in next(os.walk(config.TOPVIEWKINECT_DATA_DNAME))[1]:
         dataset = load_topviewkinect_dataset(dataset_id)
         if dataset is not None:
             data_list.append(dataset)
@@ -42,7 +42,7 @@ def get_data():
 
 
 def load_topviewkinect_dataset(dataset_id):
-    dataset_json = config.TOPVIEWKINECT_DATASET_DESCRIPTION_JSON_F.format(
+    dataset_json = config.TOPVIEWKINECT_SUBJECT_DESCRIPTION_JSON_FNAME.format(
         id=dataset_id)
     if os.path.isfile(dataset_json):
         with open(dataset_json) as f:
@@ -52,7 +52,7 @@ def load_topviewkinect_dataset(dataset_id):
 
 
 def load_topviewkinect_labels(dataset_id):
-    labels_csv = config.TOPVIEWKINECT_DATASET_LABELS_CSV_F.format(id=dataset_id)
+    labels_csv = config.TOPVIEWKINECT_LABELS_CSV_FNAME.format(id=dataset_id)
     labels_df = pd.read_csv(labels_csv)
     labels_df.set_index("frame_id", inplace=True)
     return labels_df
@@ -65,6 +65,6 @@ def update_topviewkinect_labels(dataset_id, frame_labels):
     new_frame_labels_list = list(map(int, frame_labels.values()))
     old_labels_df.loc[frame_ids_list, "activity"] = new_frame_labels_list
 
-    labels_csv = config.TOPVIEWKINECT_DATASET_LABELS_CSV_F.format(id=dataset_id)
+    labels_csv = config.TOPVIEWKINECT_LABELS_CSV_FNAME.format(id=dataset_id)
     old_labels_df.reset_index("frame_id", inplace=True)
     old_labels_df.to_csv(labels_csv, index=False)

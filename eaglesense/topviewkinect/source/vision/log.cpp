@@ -61,6 +61,11 @@ namespace topviewkinect
             return dataset_directory + "/rgb";
         }
 
+        static const std::string get_visualization_directory(const std::string& dataset_directory)
+        {
+            return dataset_directory + "/visualization";
+        }
+
         const int InteractionLog::get_size() const
         {
             return this->dataset_size;
@@ -222,6 +227,13 @@ namespace topviewkinect
 
             topviewkinect::util::log_println("Captured " + this->dataset_size);
             ++this->dataset_size;
+        }
+
+        void InteractionLog::save_visualization(const int frame_id, const cv::Mat& visualization_frame)
+        {
+            std::ostringstream visualization_image_ss;
+            visualization_image_ss << get_visualization_directory(this->dataset_directory) << "/" << frame_id << ".jpeg";
+            cv::imwrite(visualization_image_ss.str(), visualization_frame);
         }
 
         // Postprocess

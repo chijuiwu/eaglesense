@@ -24,7 +24,7 @@ DATA = r"/topviewkinect/data/([\w\W]*)"
 eaglesense_web_handlers = [
     tornado.web.url(STATIC_FILES, tornado.web.StaticFileHandler),
     tornado.web.url(DATA, tornado.web.StaticFileHandler,
-                    {"path": config.TOPVIEWKINECT_DATA_DIR}),
+                    {"path": config.TOPVIEWKINECT_DATA_DNAME}),
 
     tornado.web.url(handlers.IndexPage.url, handlers.IndexPage),
     tornado.web.url(handlers.TrackingPage.url, handlers.TrackingPage),

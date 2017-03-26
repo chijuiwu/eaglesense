@@ -13,25 +13,28 @@ You should have received a copy of the GNU General Public License along with thi
 
 import os
 
-PROJECT_DIR = os.path.dirname(os.path.realpath(__file__)) + "/.."
+PROJECT_DNAME = os.path.dirname(os.path.realpath(__file__)) + "/.."
 
-TOPVIEWKINECT_EXE = PROJECT_DIR + """\
+TOPVIEWKINECT_EXE = PROJECT_DNAME + """\
 /eaglesense/topviewkinect/x64/Release/topviewkinect.exe"""
 
-DATA_DIR = PROJECT_DIR + """\
+DATA_DNAME = PROJECT_DNAME + """\
 /data"""
 
-TOPVIEWKINECT_DATA_DIR = PROJECT_DIR + """\
+TOPVIEWKINECT_DATA_DNAME = PROJECT_DNAME + """\
 /data/topviewkinect"""
 
-TOPVIEWKINECT_DATASET_DIR_F = PROJECT_DIR + """\
+TOPVIEWKINECT_SUBJECT_DNAME = PROJECT_DNAME + """\
 /data/topviewkinect/{id}"""
 
-TOPVIEWKINECT_DATASET_FEATURES_CSV_F = PROJECT_DIR + """\
+TOPVIEWKINECT_SUBJECT_DESCRIPTION_JSON_FNAME = PROJECT_DNAME + """\
+/data/topviewkinect/{id}/description.json"""
+
+TOPVIEWKINECT_FEATURES_CSV_FNAME = PROJECT_DNAME + """\
 /data/topviewkinect/{id}/features.csv"""
 
-TOPVIEWKINECT_DATASET_LABELS_CSV_F = PROJECT_DIR + """\
+TOPVIEWKINECT_LABELS_CSV_FNAME = PROJECT_DNAME + """\
 /data/topviewkinect/{id}/labels.csv"""
 
-TOPVIEWKINECT_DATASET_DESCRIPTION_JSON_F = PROJECT_DIR + """\
-/data/topviewkinect/{id}/description.json"""
+TOPVIEWKINECT_PARAMS_PKL_FNAME = PROJECT_DNAME + """\
+/data/topviewkinect/{id}/params_{test}.pkl"""

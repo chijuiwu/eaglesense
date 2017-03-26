@@ -527,6 +527,12 @@ namespace topviewkinect
             }
         }
 
+        bool TopViewSpace::save_visualization()
+        {
+            this->interaction_log.save_visualization(this->kinect_frame_id, this->visualization_frame);
+            return true;
+        }
+
         void TopViewSpace::postprocess(const std::string& dataset_name, const bool relabel)
         {
             // Postprocessed data files
@@ -632,7 +638,8 @@ namespace topviewkinect
                 }
 
                 // Invalidate visualization
-                this->visualization_frame.setTo(topviewkinect::color::CV_BGR_WHITE);
+                cv::cvtColor(this->depth_frame, this->visualization_frame, CV_GRAY2BGR);
+                //this->visualization_frame.setTo(topviewkinect::color::CV_BGR_WHITE);
 
                 // Draw activity tracking zone
                 cv::Rect2d activity_zone(topviewkinect::vision::ACTIVITY_ZONE, topviewkinect::vision::ACTIVITY_ZONE, topviewkinect::kinect2::DEPTH_WIDTH - topviewkinect::vision::ACTIVITY_ZONE * 2, topviewkinect::kinect2::DEPTH_HEIGHT - topviewkinect::vision::ACTIVITY_ZONE);
@@ -641,8 +648,10 @@ namespace topviewkinect
                 int skeleton_color_idx = 0;
                 for (const topviewkinect::skeleton::Skeleton& skeleton : this->skeletons)
                 {
-                    // Skeleton
-                    this->visualization_frame.setTo(topviewkinect::color::CV_BGR_SKELETON[skeleton_color_idx], skeleton.get_mask());
+                    // Skeleton overlay
+                    cv::Mat skeleton_overlay = this->visualization_frame.clone();
+                    skeleton_overlay.setTo(topviewkinect::color::CV_BGR_SKELETON[skeleton_color_idx], skeleton.get_mask());
+                    cv::addWeighted(skeleton_overlay, topviewkinect::color::SKELETON_OVERLAY_ALPHA, this->visualization_frame, 1 - topviewkinect::color::SKELETON_OVERLAY_ALPHA, 0, this->visualization_frame);
 
                     const topviewkinect::skeleton::Joint skeleton_center = skeleton.get_body_center();
 
@@ -656,7 +665,7 @@ namespace topviewkinect
                         // Head
                         const topviewkinect::skeleton::Joint skeleton_head = skeleton.get_head();
                         cv::Point head_pt = cv::Point(skeleton_head.x, skeleton_head.y);
-                        cv::circle(this->visualization_frame, head_pt, 3, topviewkinect::color::CV_BGR_BLACK, -1);
+                        cv::circle(this->visualization_frame, head_pt, 3, topviewkinect::color::CV_BGR_WHITE, -1);
 
                         // Orientation
                         if (this->configuration.orientation_recognition && skeleton.is_activity_tracked())
@@ -664,13 +673,13 @@ namespace topviewkinect
                             int head_angle_pt_x = boost::math::iround(skeleton_head.x + 25 * std::cos(skeleton_head.orientation * CV_PI / 180.0));
                             int head_angle_pt_y = boost::math::iround(skeleton_head.y + 25 * std::sin(skeleton_head.orientation * CV_PI / 180.0));
                             cv::Point head_angle_pt = cv::Point(head_angle_pt_x, head_angle_pt_y);
-                            cv::arrowedLine(this->visualization_frame, head_pt, head_angle_pt, topviewkinect::color::CV_BGR_BLACK, 2);
+                            cv::arrowedLine(this->visualization_frame, head_pt, head_angle_pt, topviewkinect::color::CV_BGR_WHITE, 2, 8, 0, 0.3);
                         }
 
                         // Activity and device
                         if (this->configuration.interaction_recognition)
                         {
-                            cv::putText(this->visualization_frame, skeleton.get_activity(), cv::Point(skeleton_center.x, skeleton_center.y + 20), cv::FONT_HERSHEY_COMPLEX, 0.5, topviewkinect::color::CV_BGR_BLACK);
+                            cv::putText(this->visualization_frame, skeleton.get_activity(), cv::Point(skeleton_center.x, skeleton_center.y + 20), cv::FONT_HERSHEY_COMPLEX, 0.5, topviewkinect::color::CV_BGR_WHITE, 1);
                         }
                     }
 
@@ -687,7 +696,8 @@ namespace topviewkinect
                 // Frame rate
                 if (this->configuration.framerate)
                 {
-                    cv::putText(this->visualization_frame, "FPS: " + std::to_string(framerate), cv::Point(topviewkinect::kinect2::DEPTH_WIDTH - 100, 20), cv::FONT_HERSHEY_SIMPLEX, 0.4, topviewkinect::color::CV_BGR_BLACK);
+                    cv::putText(this->visualization_frame, "FPS: " + std::to_string(framerate), cv::Point(topviewkinect::kinect2::DEPTH_WIDTH - 100, 20), cv::FONT_HERSHEY_SIMPLEX, 0.4, topviewkinect::color::CV_BGR_WHITE
+                    );
                 }
 
                 // Send skeleton information to RESTful server

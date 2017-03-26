@@ -216,6 +216,7 @@ static int replay(const int dataset_id)
         cv::imshow(INFRARED_WINDOW_NAME, infrared_frame);
         cv::imshow(SPACE_WINDOW_NAME, visualization_frame);
 
+        // Windows
         int ascii_keypress = cv::waitKey(0);
         if (ascii_keypress == 2555904) // right arrow
         {
@@ -224,6 +225,10 @@ static int replay(const int dataset_id)
         else if (ascii_keypress == 2424832) // left arrow
         {
             m_space.replay_previous_frame();
+        }
+        else if (ascii_keypress == 115) // 's'
+        {
+            m_space.save_visualization();
         }
         else // anything else
         {
