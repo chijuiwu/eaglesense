@@ -38,3 +38,9 @@ TOPVIEWKINECT_LABELS_CSV_FNAME = PROJECT_DNAME + """\
 
 TOPVIEWKINECT_PARAMS_PKL_FNAME = PROJECT_DNAME + """\
 /data/topviewkinect/{id}/params_{test}.pkl"""
+
+MODEL_DNAME = PROJECT_DNAME + """\
+/models"""
+
+EAGLESENSE_MODEL_FNAME = PROJECT_DNAME + """\
+/models/{model}.model"""
