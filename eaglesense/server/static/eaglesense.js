@@ -3,7 +3,7 @@ function EagleSenseWebSocket() {
     this.skeleton_ws = new WebSocket(this.skeleton_ws_url);
 }
 
-EagleSenseREST.prototype.connect = function(
+EagleSenseWebSocket.prototype.connect = function(
     onopen_callback, onmessage_callback, onclose_callback, onerror_callback) {
 
     this.skeleton_ws.onopen = function(event) {
