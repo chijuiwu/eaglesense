@@ -33,6 +33,5 @@ class TopviewKinectSkeletonWebsocket(tornado.websocket.WebSocketHandler):
     def on_message(self, message):
         pass
 
-
-def send_skeletons(self, skeletons):
-    self.write_message(skeletons)
+    def send_skeletons(self, skeletons):
+        self.write_message(skeletons)
