@@ -7,6 +7,8 @@
 
 ## OVERVIEW
 
+New project coming soon.
+
 *EagleSense* is a top-view tracking system that leverages a depth-infrared hybrid sensing pipeline for real-time human activity and device recognition. It provides a minimalistic RESTful API that can be used by ubicomp applications (e.g., proxemic-aware or cross-device systems) in interactive spaces.
 
 ```json
