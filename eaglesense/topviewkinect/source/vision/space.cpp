@@ -187,7 +187,8 @@ namespace topviewkinect
             }
 
             DWORD kinect_frames_types = FrameSourceTypes_Depth | FrameSourceTypes_LongExposureInfrared;
-            if (this->configuration.color) {
+            if (this->configuration.color)
+{
                 kinect_frames_types = FrameSourceTypes_Depth | FrameSourceTypes_LongExposureInfrared | FrameSourceTypes_Color;
             }
             hr = this->kinect_sensor->OpenMultiSourceFrameReader(kinect_frames_types, &this->kinect_multisource_frame_reader);
@@ -217,6 +218,11 @@ namespace topviewkinect
 
             HRESULT hr;
             hr = this->kinect_multisource_frame_reader->AcquireLatestFrame(&p_multisource_frame);
+			// Since the Kinect v2 runs at 30FPS, the new frame may not be ready yet
+			if (FAILED(hr))
+			{
+				return false;
+			}
 
             // Get depth frame
             if (SUCCEEDED(hr))
@@ -438,7 +444,7 @@ namespace topviewkinect
 
         bool TopViewSpace::load_dataset(const int dataset_id)
         {
-            topviewkinect::util::log_println("Loading Dataset " + std::to_string(dataset_id) + "...");
+            topviewkinect::util::log_println("Loading Dataset (" + std::to_string(dataset_id) + ") ...");
 
             this->interaction_log.initialize(dataset_id);
             bool dataset_loaded = this->interaction_log.load_directories();
@@ -464,7 +470,7 @@ namespace topviewkinect
             cv::Mat infrared_frame = cv::imread(std::get<1>(next_frames.second), CV_LOAD_IMAGE_GRAYSCALE);
             this->apply_kinect_multisource_frame(next_frames.first, depth_frame, infrared_frame);
 
-            topviewkinect::util::log_println("Dataset " + std::to_string(dataset_id) + " (Size: " + std::to_string(dataset_frames.size()) + ") Loaded.");
+            topviewkinect::util::log_println("Dataset (" + std::to_string(dataset_id) + ") Size: " + std::to_string(dataset_frames.size()) + ".");
             return true;
         }
 
@@ -500,7 +506,7 @@ namespace topviewkinect
 
         bool TopViewSpace::create_dataset(const int dataset_id)
         {
-            topviewkinect::util::log_println("Creating dataset " + std::to_string(dataset_id) + "...");
+            topviewkinect::util::log_println("Creating dataset (" + std::to_string(dataset_id) + ")...");
 
             this->interaction_log.initialize(dataset_id);
             bool dataset_created = this->interaction_log.create_directories();
@@ -533,10 +539,10 @@ namespace topviewkinect
             return true;
         }
 
-        void TopViewSpace::postprocess(const std::string& dataset_name, const bool relabel)
+        void TopViewSpace::postprocess(const std::string& dataset_name, const bool keep_label)
         {
             // Postprocessed data files
-            this->interaction_log.create_postprocessed_files(relabel);
+            this->interaction_log.create_postprocessed_files(keep_label);
 
             // Postprocess images
             const std::map<int, std::tuple<std::string, std::string>> dataset_frames = this->interaction_log.get_dataset_frames();
@@ -553,14 +559,14 @@ namespace topviewkinect
                 this->apply_kinect_multisource_frame(kv.first, depth_frame, infrared_frame); // process
                 if (current_frame_idx >= topviewkinect::vision::REQUIRED_BACKGROUND_FRAMES)  // output real data
                 {
-                    this->interaction_log.output_skeleton_features(this->kinect_frame_id, this->skeletons, relabel);
+                    this->interaction_log.output_skeleton_features(this->kinect_frame_id, this->skeletons, keep_label);
                 }
 
                 // Show progress
                 if (++current_frame_idx % progressbar_step == 0)
                 {
                     int progress = boost::math::iround(static_cast<float>(current_frame_idx) / num_total_frames * 100);
-                    topviewkinect::util::log_println("... Frame " + std::to_string(this->kinect_frame_id) + " (" + std::to_string(progress) + "%)");
+                    topviewkinect::util::log_println(std::to_string(this->kinect_frame_id) + "/" + std::to_string(num_total_frames) + " (" + std::to_string(progress) + "%)");
                 }
             }
 
@@ -642,8 +648,8 @@ namespace topviewkinect
                 //this->visualization_frame.setTo(topviewkinect::color::CV_BGR_WHITE);
 
                 // Draw activity tracking zone
-                cv::Rect2d activity_zone(topviewkinect::vision::ACTIVITY_ZONE, topviewkinect::vision::ACTIVITY_ZONE, topviewkinect::kinect2::DEPTH_WIDTH - topviewkinect::vision::ACTIVITY_ZONE * 2, topviewkinect::kinect2::DEPTH_HEIGHT - topviewkinect::vision::ACTIVITY_ZONE);
-                cv::rectangle(this->visualization_frame, activity_zone, topviewkinect::color::CV_BGR_RED, 1);
+                //cv::Rect2d activity_zone(topviewkinect::vision::ACTIVITY_ZONE, topviewkinect::vision::ACTIVITY_ZONE, topviewkinect::kinect2::DEPTH_WIDTH - topviewkinect::vision::ACTIVITY_ZONE * 2, topviewkinect::kinect2::DEPTH_HEIGHT - topviewkinect::vision::ACTIVITY_ZONE);
+                //cv::rectangle(this->visualization_frame, activity_zone, topviewkinect::color::CV_BGR_RED, 1);
 
                 int skeleton_color_idx = 0;
                 for (const topviewkinect::skeleton::Skeleton& skeleton : this->skeletons)
@@ -656,9 +662,9 @@ namespace topviewkinect
                     const topviewkinect::skeleton::Joint skeleton_center = skeleton.get_body_center();
 
                     // ID
-                    std::ostringstream id_ss;
-                    id_ss << skeleton.get_id();
-                    cv::putText(this->visualization_frame, id_ss.str(), cv::Point(skeleton_center.x, skeleton_center.y), cv::FONT_HERSHEY_COMPLEX, 0.5, topviewkinect::color::CV_BGR_WHITE);
+                    //std::ostringstream id_ss;
+                    //id_ss << skeleton.get_id();
+                    //cv::putText(this->visualization_frame, id_ss.str(), cv::Point(skeleton_center.x, skeleton_center.y), cv::FONT_HERSHEY_COMPLEX, 1, topviewkinect::color::CV_BGR_WHITE, 2);
 
                     if (skeleton.is_activity_tracked())
                     {
@@ -670,16 +676,16 @@ namespace topviewkinect
                         // Orientation
                         if (this->configuration.orientation_recognition && skeleton.is_activity_tracked())
                         {
-                            int head_angle_pt_x = boost::math::iround(skeleton_head.x + 25 * std::cos(skeleton_head.orientation * CV_PI / 180.0));
-                            int head_angle_pt_y = boost::math::iround(skeleton_head.y + 25 * std::sin(skeleton_head.orientation * CV_PI / 180.0));
+                            int head_angle_pt_x = boost::math::iround(skeleton_head.x + 50 * std::cos(skeleton_head.orientation * CV_PI / 180.0));
+                            int head_angle_pt_y = boost::math::iround(skeleton_head.y + 50 * std::sin(skeleton_head.orientation * CV_PI / 180.0));
                             cv::Point head_angle_pt = cv::Point(head_angle_pt_x, head_angle_pt_y);
-                            cv::arrowedLine(this->visualization_frame, head_pt, head_angle_pt, topviewkinect::color::CV_BGR_WHITE, 2, 8, 0, 0.3);
+                            cv::arrowedLine(this->visualization_frame, head_pt, head_angle_pt, topviewkinect::color::CV_BGR_WHITE, 5, 8, 0, 0.5);
                         }
 
                         // Activity and device
                         if (this->configuration.interaction_recognition)
                         {
-                            cv::putText(this->visualization_frame, skeleton.get_activity(), cv::Point(skeleton_center.x, skeleton_center.y + 20), cv::FONT_HERSHEY_COMPLEX, 0.5, topviewkinect::color::CV_BGR_WHITE, 1);
+                            cv::putText(this->visualization_frame, skeleton.get_activity(), cv::Point(skeleton_head.x, skeleton_head.y + 40), cv::FONT_HERSHEY_COMPLEX, 1, topviewkinect::color::CV_BGR_WHITE, 2);
                         }
                     }
 
@@ -696,8 +702,8 @@ namespace topviewkinect
                 // Frame rate
                 if (this->configuration.framerate)
                 {
-                    cv::putText(this->visualization_frame, "FPS: " + std::to_string(framerate), cv::Point(topviewkinect::kinect2::DEPTH_WIDTH - 100, 20), cv::FONT_HERSHEY_SIMPLEX, 0.4, topviewkinect::color::CV_BGR_WHITE
-                    );
+                    //cv::putText(this->visualization_frame, "FPS: " + std::to_string(framerate), cv::Point(topviewkinect::kinect2::DEPTH_WIDTH - 100, 20), cv::FONT_HERSHEY_SIMPLEX, 0.4, topviewkinect::color::CV_BGR_WHITE
+                    //);
                 }
 
                 // Send skeleton information to RESTful server
@@ -938,7 +944,7 @@ namespace topviewkinect
 
                 if (!inside_acitivty_tracking_zone(skeleton_depth_silhouette, skeleton_bounding_rect.x, skeleton_bounding_rect.y))
                 {
-                    skeleton.set_activity_tracking(false);
+                    skeleton.set_activity_tracked(false);
                     continue;
                 }
 
@@ -1207,7 +1213,7 @@ namespace topviewkinect
                 skeleton_head.orientation = std::get<1>(orientation_distances[0]);
 
                 skeleton.set_head(skeleton_head);
-                skeleton.set_activity_tracking(true);
+                skeleton.set_activity_tracked(true);
 
                 // Figures
                 //cv::Mat skeleton_head_orientation_frame = skeleton_depth_body_layers_color.clone();

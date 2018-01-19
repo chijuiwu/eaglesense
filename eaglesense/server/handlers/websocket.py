@@ -15,8 +15,10 @@ import tornado.websocket
 import tornado.escape
 
 
+
 class TopviewKinectSkeletonWebsocket(tornado.websocket.WebSocketHandler):
     url = r"/ws/skeleton/"
+
 
     def __init__(self, application, request, **kwargs):
         super(TopviewKinectSkeletonWebsocket, self).__init__(

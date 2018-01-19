@@ -54,6 +54,7 @@ def load_topviewkinect_dataset(dataset_id):
 def load_topviewkinect_labels(dataset_id):
     labels_csv = config.TOPVIEWKINECT_LABELS_CSV_FNAME.format(id=dataset_id)
     labels_df = pd.read_csv(labels_csv)
+    labels_df.drop_duplicates(subset="frame_id", keep=False, inplace=True)  # remove duplicates
     labels_df.set_index("frame_id", inplace=True)
     return labels_df
 

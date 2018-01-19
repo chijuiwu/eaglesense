@@ -84,7 +84,7 @@ namespace topviewkinect
             const bool is_updated() const;
             void set_updated(bool updated);
             const bool is_activity_tracked() const;
-            void set_activity_tracking(bool updated);
+            void set_activity_tracked(bool updated);
 
             // Joints
             double width;

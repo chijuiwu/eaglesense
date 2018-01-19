@@ -78,7 +78,7 @@ namespace topviewkinect
 
             // Postprocess
             void create_postprocessed_files(const bool relabel);
-            void output_skeleton_features(const int frame_id, const std::vector<topviewkinect::skeleton::Skeleton>& skeletons, const bool relabel);
+            void output_skeleton_features(const int frame_id, const std::vector<topviewkinect::skeleton::Skeleton>& skeletons, const bool keep_label);
             void output_processing_time(const int frame_id, const long long features_time, const long long total_time);
             void output_description(const std::string& dataset_name);
         };

@@ -35,7 +35,7 @@ static constexpr const char* SPACE_WINDOW_NAME = "Top-view Interactive Space";
 static int start();
 static int replay(const int dataset_id);
 static int capture(const int dataset_id);
-static int postprocess(const int dataset_id, const std::string& dataset_name, const bool relabel);
+static int postprocess(const int dataset_id, const std::string& dataset_name, const bool keep_label);
 
 int main(int argc, char* argv[])
 {
@@ -59,18 +59,17 @@ int main(int argc, char* argv[])
 
     boost::program_options::options_description general_opts("General");
     general_opts.add_options()
-        ("version,v", "Version")
         ("help,h", "Help");
 
-    boost::program_options::options_description advanced_opts("Advanced (w/ Datasets)");
+    boost::program_options::options_description advanced_opts("Advanced (working with datasets)");
     int dataset_id;
     std::string dataset_name;
     advanced_opts.add_options()
         ("replay,r", "Replay")
         ("capture,c", "Capture")
         ("postprocess,p", "Postprocess")
-        ("features,f", "Postprocess (features ONLY)")
-        ("dataset_id,d", boost::program_options::value<int>(&dataset_id), "Dataset ID (Required for advanced options)")
+        ("keep_label,k", "Postprocess (keep label)")
+        ("dataset_id,d", boost::program_options::value<int>(&dataset_id), "Dataset ID (required)")
         ("dataset_name,n", boost::program_options::value<std::string>(&dataset_name)->default_value("Untitled"), "Dataset name");
 
     all_opts.add(general_opts).add(advanced_opts);
@@ -89,16 +88,10 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
-    // Start
+	// EagleSense welcome message
     std::cout << "EagleSense topviewkinect " << topviewkinect::VERSION << std::endl;
 
-    // -v
-    if (program_options.count("version"))
-    {
-        return EXIT_SUCCESS;
-    }
-
-    // -h
+    // -h help
     if (program_options.count("help"))
     {
         std::cout << all_opts << std::endl;
@@ -110,32 +103,30 @@ int main(int argc, char* argv[])
         return start();
     }
 
-    // Advanced (w/ Datasets)
-
-    // Check dataset id
+    // Advanced (working with datasets)
     if (!program_options.count("dataset_id"))
     {
         std::cout << "Missing dataset ID." << std::endl;
         return EXIT_FAILURE;
     }
 
-    // -r
+    // -r replay
     if (program_options.count("replay"))
     {
         return replay(dataset_id);
     }
 
-    // -c
+    // -c capture
     if (program_options.count("capture"))
     {
         return capture(dataset_id);
     }
     
-    // -p
+    // -p postprocess
     if (program_options.count("postprocess"))
     {
-        bool relabel = program_options.count("features") == 0 ? true : false;
-        return postprocess(dataset_id, dataset_name, relabel);
+        bool keep_label = program_options.count("keep_label") == 1;
+        return postprocess(dataset_id, dataset_name, keep_label);
     }
 
     return EXIT_SUCCESS;
@@ -286,11 +277,11 @@ static int capture(const int dataset_id)
     return EXIT_SUCCESS;
 }
 
-static int postprocess(const int dataset_id, const std::string& dataset_name, const bool relabel)
+static int postprocess(const int dataset_id, const std::string& dataset_name, const bool keep_label)
 {
     std::string info;
-    !relabel ? info = "**Features Only**" : 0;
-    topviewkinect::util::log_println("Postprocessing ... " + info);
+    keep_label ? info = "(keep labels)" : "";
+    topviewkinect::util::log_println("Postprocessing " + info + " ... ");
 
     // Create interactive space
     topviewkinect::vision::TopViewSpace m_space;
@@ -305,7 +296,7 @@ static int postprocess(const int dataset_id, const std::string& dataset_name, co
     }
 
     // Postprocess
-    m_space.postprocess(dataset_name, relabel);
+    m_space.postprocess(dataset_name, keep_label);
 
     topviewkinect::util::log_println("Done!");
     return EXIT_SUCCESS;

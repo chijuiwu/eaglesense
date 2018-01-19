@@ -290,7 +290,7 @@
         } else if ($("#label_depth_image").is(".label-danger")) {
             $("#selected_image").attr("src", "/topviewkinect/data/{{ dataset['id'] }}/depth/" + frame_id + ".jpeg");
         } else {
-            $("#selected_image").attr("src", "/topviewkinect/data/{{ dataset['id'] }}/infrared_hack/" + frame_id + ".jpeg");
+            $("#selected_image").attr("src", "/topviewkinect/data/{{ dataset['id'] }}/low_infrared/" + frame_id + ".jpeg");
         }
     }
 

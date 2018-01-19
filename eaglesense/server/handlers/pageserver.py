@@ -18,7 +18,7 @@ import math
 from eaglesense import io
 from eaglesense.server.handlers import base
 
-FRAME_PAGINATION_SIZE = 2000
+FRAME_PAGINATION_SIZE = 1000
 
 
 class IndexPage(base.BaseHandler):

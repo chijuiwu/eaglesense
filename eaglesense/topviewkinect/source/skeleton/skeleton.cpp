@@ -60,7 +60,7 @@ namespace topviewkinect
             return this->activity_tracked;
         }
 
-        void Skeleton::set_activity_tracking(bool activity_tracked)
+        void Skeleton::set_activity_tracked(bool activity_tracked)
         {
             this->activity_tracked = activity_tracked;
         }
