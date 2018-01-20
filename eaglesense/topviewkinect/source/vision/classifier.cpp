@@ -97,7 +97,7 @@ namespace topviewkinect
             Py_DECREF(booster_load_model_func);
             Py_DECREF(booster_load_model_result);
 
-            topviewkinect::util::log_println("... Python initialized");
+            topviewkinect::util::log_println("Python initialized!!!");
             return true;
         }
 

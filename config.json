@@ -2,10 +2,10 @@
     "tracking": {
         "framerate": 1,
         "orientation_recognition": 0,
-        "interaction_recognition": 0,
+        "interaction_recognition": 1,
         "restful_connection": 0
     },
-    "interaction_model": "initial_cs.model",
+    "interaction_model": "v2/v2.model",
     "restful_server": {
         "address": "localhost",
         "port": 5000

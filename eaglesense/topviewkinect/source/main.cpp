@@ -155,7 +155,7 @@ static int start()
         int ascii_keypress = cv::waitKey(1); // any key to exit
         if (ascii_keypress != -1)
         {
-            topviewkinect::util::log_println("System terminating...");
+            topviewkinect::util::log_println("EagleSense topviewkinect exiting...");
             break;
         }
 
