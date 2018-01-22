@@ -23,14 +23,15 @@ You should have received a copy of the GNU General Public License along with thi
 #include <vector>
 
 #include "topviewkinect/topviewkinect.h"
+#include "topviewkinect/kinect2.h"
 #include "topviewkinect/color.h"
 #include "topviewkinect/util.h"
 #include "topviewkinect/vision/space.h"
 
-static constexpr const char* DEPTH_WINDOW_NAME = "Top-view Kinect Depth";
-static constexpr const char* INFRARED_WINDOW_NAME = "Top-view Kinect Infrared";
-static constexpr const char* RGB_WINDOW_NAME = "Top-view Kinect RGB";
-static constexpr const char* SPACE_WINDOW_NAME = "Top-view Interactive Space";
+static constexpr const char* DEPTH_WINDOW_NAME = "Top-View Kinect Depth";
+static constexpr const char* INFRARED_WINDOW_NAME = "Top-View Kinect Infrared";
+static constexpr const char* RGB_WINDOW_NAME = "Top-View Kinect RGB";
+static constexpr const char* SPACE_WINDOW_NAME = "Top-View Interactive Space";
 
 static int start();
 static int replay(const int dataset_id);
@@ -68,7 +69,7 @@ int main(int argc, char* argv[])
         ("replay,r", "Replay")
         ("capture,c", "Capture")
         ("postprocess,p", "Postprocess")
-        ("keep_label,k", "Postprocess (keep label)")
+        ("keep_label,k", "Keep labels during postprocessing")
         ("dataset_id,d", boost::program_options::value<int>(&dataset_id), "Dataset ID (required)")
         ("dataset_name,n", boost::program_options::value<std::string>(&dataset_name)->default_value("Untitled"), "Dataset name");
 
@@ -145,12 +146,24 @@ static int start()
         return EXIT_FAILURE;
     }
 
+	// Create windows
+	cv::namedWindow(DEPTH_WINDOW_NAME);
+	cv::namedWindow(INFRARED_WINDOW_NAME);
+	cv::namedWindow(SPACE_WINDOW_NAME);
+	const cv::Size enlarged_size = cv::Size(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE.width * 2, topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE.height * 2);
+	cv::Mat visualization_frame_enlarged = cv::Mat::zeros(enlarged_size, CV_8UC3);
+
     // Tracking
     while (true)
     {
-        cv::imshow(DEPTH_WINDOW_NAME, m_space.get_depth_frame());
-        cv::imshow(INFRARED_WINDOW_NAME, m_space.get_infrared_frame());
-        cv::imshow(SPACE_WINDOW_NAME, m_space.get_visualization_frame());
+		cv::Mat depth_frame = m_space.get_depth_frame();
+		cv::Mat infrared_frame = m_space.get_infrared_frame();
+		cv::Mat visualization_frame = m_space.get_visualization_frame();
+		cv::resize(visualization_frame, visualization_frame_enlarged, visualization_frame_enlarged.size(), 0, 0, cv::INTER_LINEAR);
+
+        cv::imshow(DEPTH_WINDOW_NAME, depth_frame);
+        cv::imshow(INFRARED_WINDOW_NAME, infrared_frame);
+        cv::imshow(SPACE_WINDOW_NAME, visualization_frame_enlarged);
 
         int ascii_keypress = cv::waitKey(1); // any key to exit
         if (ascii_keypress != -1)
@@ -191,29 +204,37 @@ static int replay(const int dataset_id)
         return EXIT_FAILURE;
     }
 
+	// Create windows
+	cv::namedWindow(DEPTH_WINDOW_NAME);
+	cv::namedWindow(INFRARED_WINDOW_NAME);
+	cv::namedWindow(SPACE_WINDOW_NAME);
+	const cv::Size enlarged_size = cv::Size(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE.width * 2, topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE.height * 2);
+	cv::Mat visualization_frame_enlarged = cv::Mat::zeros(enlarged_size, CV_8UC3);
+
     // Replay
     while (true)
     {
         cv::Mat depth_frame = m_space.get_depth_frame();
         cv::Mat infrared_frame = m_space.get_infrared_frame();
         cv::Mat visualization_frame = m_space.get_visualization_frame();
+		cv::resize(visualization_frame, visualization_frame_enlarged, visualization_frame_enlarged.size(), 0, 0, cv::INTER_LINEAR);
 
         // Visualize tracking
         const int frame_id = m_space.get_kinect_frame_id();
         cv::putText(depth_frame, std::to_string(frame_id), cv::Point(20, 20), cv::FONT_HERSHEY_SIMPLEX, 0.3, topviewkinect::color::CV_WHITE);
         cv::putText(infrared_frame, std::to_string(frame_id), cv::Point(20, 20), cv::FONT_HERSHEY_SIMPLEX, 0.3, topviewkinect::color::CV_WHITE);
-        cv::putText(visualization_frame, std::to_string(frame_id), cv::Point(20, 20), cv::FONT_HERSHEY_SIMPLEX, 0.3, topviewkinect::color::CV_BGR_WHITE);
+        cv::putText(visualization_frame_enlarged, std::to_string(frame_id), cv::Point(20, 20), cv::FONT_HERSHEY_SIMPLEX, 0.3, topviewkinect::color::CV_BGR_WHITE);
         cv::imshow(DEPTH_WINDOW_NAME, depth_frame);
         cv::imshow(INFRARED_WINDOW_NAME, infrared_frame);
-        cv::imshow(SPACE_WINDOW_NAME, visualization_frame);
+        cv::imshow(SPACE_WINDOW_NAME, visualization_frame_enlarged);
 
         // Windows
-        int ascii_keypress = cv::waitKey(0);
-        if (ascii_keypress == 2555904) // right arrow
+        int ascii_keypress = cv::waitKeyEx(0);
+        if (ascii_keypress == 2555904) // Win10 right arrow
         {
             m_space.replay_next_frame();
         }
-        else if (ascii_keypress == 2424832) // left arrow
+        else if (ascii_keypress == 2424832) // Win10 left arrow
         {
             m_space.replay_previous_frame();
         }

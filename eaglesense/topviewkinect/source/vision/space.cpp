@@ -668,25 +668,29 @@ namespace topviewkinect
 
                     if (skeleton.is_activity_tracked())
                     {
+						const topviewkinect::skeleton::Joint skeleton_head = skeleton.get_head();
+						const topviewkinect::skeleton::Joint skeleton_center = skeleton.get_body_center();
+
                         // Head
-                        const topviewkinect::skeleton::Joint skeleton_head = skeleton.get_head();
                         cv::Point head_pt = cv::Point(skeleton_head.x, skeleton_head.y);
                         cv::circle(this->visualization_frame, head_pt, 3, topviewkinect::color::CV_BGR_WHITE, -1);
-
-                        // Orientation
-                        if (this->configuration.orientation_recognition && skeleton.is_activity_tracked())
-                        {
-                            int head_angle_pt_x = boost::math::iround(skeleton_head.x + 50 * std::cos(skeleton_head.orientation * CV_PI / 180.0));
-                            int head_angle_pt_y = boost::math::iround(skeleton_head.y + 50 * std::sin(skeleton_head.orientation * CV_PI / 180.0));
-                            cv::Point head_angle_pt = cv::Point(head_angle_pt_x, head_angle_pt_y);
-                            cv::arrowedLine(this->visualization_frame, head_pt, head_angle_pt, topviewkinect::color::CV_BGR_WHITE, 5, 8, 0, 0.5);
-                        }
 
                         // Activity and device
                         if (this->configuration.interaction_recognition)
                         {
-                            cv::putText(this->visualization_frame, skeleton.get_activity(), cv::Point(skeleton_head.x, skeleton_head.y + 40), cv::FONT_HERSHEY_COMPLEX, 1, topviewkinect::color::CV_BGR_WHITE, 2);
+							cv::Rect activity_rect = cv::Rect(skeleton_center.x - 70, skeleton_center.y, 160, 50);
+							cv::rectangle(this->visualization_frame, activity_rect, topviewkinect::color::CV_BGR_BLACK, -1);
+                            cv::putText(this->visualization_frame, skeleton.get_activity(), cv::Point(skeleton_center.x - 60, skeleton_center.y + 30), cv::FONT_HERSHEY_COMPLEX, 1, topviewkinect::color::CV_BGR_WHITE, 2);
                         }
+
+						// Orientation
+						if (this->configuration.orientation_recognition && skeleton.is_activity_tracked())
+						{
+							int head_angle_pt_x = boost::math::iround(skeleton_head.x + 50 * std::cos(skeleton_head.orientation * CV_PI / 180.0));
+							int head_angle_pt_y = boost::math::iround(skeleton_head.y + 50 * std::sin(skeleton_head.orientation * CV_PI / 180.0));
+							cv::Point head_angle_pt = cv::Point(head_angle_pt_x, head_angle_pt_y);
+							cv::arrowedLine(this->visualization_frame, head_pt, head_angle_pt, topviewkinect::color::CV_BGR_WHITE, 3, 8, 0, 0.5);
+						}
                     }
 
                     // Update color index
