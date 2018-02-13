@@ -19,6 +19,17 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\thirdparty\mpi\colorcode.h" />
+    <ClInclude Include="include\thirdparty\mpi\Convert.h" />
+    <ClInclude Include="include\thirdparty\mpi\Convolve.h" />
+    <ClInclude Include="include\thirdparty\mpi\Copyright.h" />
+    <ClInclude Include="include\thirdparty\mpi\Error.h" />
+    <ClInclude Include="include\thirdparty\mpi\flowIO.h" />
+    <ClInclude Include="include\thirdparty\mpi\Image.h" />
+    <ClInclude Include="include\thirdparty\mpi\ImageIO.h" />
+    <ClInclude Include="include\thirdparty\mpi\imageLib.h" />
+    <ClInclude Include="include\thirdparty\mpi\RefCntMem.h" />
+    <ClInclude Include="include\thirdparty\openpose\openpose_wrapper.h" />
     <ClInclude Include="include\stdafx.h" />
     <ClInclude Include="include\targetver.h" />
     <ClInclude Include="include\topviewkinect\color.h" />
@@ -34,6 +45,16 @@
     <ClInclude Include="include\topviewkinect\vision\space.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="include\thirdparty\mpi\colorcode.cpp" />
+    <ClCompile Include="include\thirdparty\mpi\colortest.cpp" />
+    <ClCompile Include="include\thirdparty\mpi\color_flow.cpp" />
+    <ClCompile Include="include\thirdparty\mpi\Convert.cpp" />
+    <ClCompile Include="include\thirdparty\mpi\Convolve.cpp" />
+    <ClCompile Include="include\thirdparty\mpi\flowIO.cpp" />
+    <ClCompile Include="include\thirdparty\mpi\Image.cpp" />
+    <ClCompile Include="include\thirdparty\mpi\ImageIO.cpp" />
+    <ClCompile Include="include\thirdparty\mpi\ImageIOpng.cpp" />
+    <ClCompile Include="include\thirdparty\mpi\RefCntMem.cpp" />
     <ClCompile Include="source\main.cpp" />
     <ClCompile Include="source\skeleton\geodesic.cpp" />
     <ClCompile Include="source\skeleton\skeleton.cpp" />
@@ -77,7 +98,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v140</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -110,8 +131,8 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>include;$(OPENCV3)\build\include;$(BOOSTCPP);$(PYTHON3)\include;$(PYTHON3)\Lib\site-packages\numpy\core\include;$(KINECTSDK20_DIR)\inc;$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
-    <LibraryPath>$(OPENCV3)\build\x64\vc15\lib;$(BOOSTCPP)\lib64-msvc-14.1;$(PYTHON3)\libs;$(PYTHON3)\Lib\site-packages\numpy\core\lib;$(KINECTSDK20_DIR)\lib\x64;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);$(NETFXKitsDir)Lib\um\x64</LibraryPath>
+    <IncludePath>include;D:\libs\openpose\include;D:\libs\openpose\3rdparty\windows\caffe3rdparty\include;D:\libs\darknet-win\darknet\src;$(OPENCV3)\include;$(CUDA_PATH_V8_0)\include;$(BOOSTCPP_VC140);$(PYTHON3)\include;$(PYTHON3)\Lib\site-packages\numpy\core\include;$(KINECTSDK20_DIR)\inc;$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
+    <LibraryPath>D:\libs\openpose\windows\x64\Release\;D:\libs\openpose\3rdparty\windows\caffe3rdparty\lib;$(OPENCV3)\x64\vc14\lib;$(BOOSTCPP_VC140)\lib64-msvc-14.0;$(PYTHON3)\libs;$(PYTHON3)\Lib\site-packages\numpy\core\lib;$(KINECTSDK20_DIR)\lib\x64;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);$(NETFXKitsDir)Lib\um\x64</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -170,14 +191,16 @@
       <AdditionalIncludeDirectories>
       </AdditionalIncludeDirectories>
       <ExpandAttributedSource>false</ExpandAttributedSource>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <LanguageStandard>stdcpp14</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>opencv_world340.lib;kinect20.lib;python36.lib;_tkinter.lib;npymath.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(CUDA_PATH_V8_0)\lib\x64\;D:\libs\darknet-win\darknet\build\darknet\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>gflags.lib;cudnn.lib;OpenPose.lib;yolo_cpp_dll.lib;Ws2_32.lib;wsock32.lib;opencv_world340.lib;kinect20.lib;python36.lib;_tkinter.lib;npymath.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

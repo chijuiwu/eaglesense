@@ -1,8 +1,8 @@
 {
     "tracking": {
         "framerate": 1,
-        "orientation_recognition": 1,
-        "interaction_recognition": 1,
+        "orientation_recognition": 0,
+        "interaction_recognition": 0,
         "restful_connection": 0
     },
     "interaction_model": "v2/v2.model",
@@ -13,6 +13,6 @@
     "data": {
         "depth": 1,
         "infrared": 1,
-        "color": 0
+        "color": 1
     }
 }

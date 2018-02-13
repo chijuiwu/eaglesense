@@ -22,8 +22,54 @@ You should have received a copy of the GNU General Public License along with thi
 
 namespace topviewkinect
 {
+
+	struct AndroidSensorData
+	{
+		std::string sender_addr;
+
+		float accel_x, accel_y, accel_z;
+		float gyro_x, gyro_y, gyro_z;
+		float orientation_x, orientation_y, orientation_z;
+		float linear_accel_x, linear_accel_y, linear_accel_z;
+		float rotation_vec_x, rotation_vec_y, rotation_vec_z;
+
+		AndroidSensorData(float accel_x_, float accel_y_, float accel_z_, float gyro_x_, float gyro_y_, float gyro_z_, float orientation_x_, float orientation_y_, float orientation_z_, float linear_accel_x_, float linear_accel_y_, float linear_accel_z_, float rotation_vec_x_, float rotation_vec_y_, float rotation_vec_z_) :
+			accel_x{ accel_x_ },
+			accel_y{ accel_y_ },
+			accel_z{ accel_z_ },
+			gyro_x{ gyro_x_ },
+			gyro_y{ gyro_y_ },
+			gyro_z{ gyro_z_ },
+			orientation_x{ orientation_x_ },
+			orientation_y{ orientation_y_ },
+			orientation_z{ orientation_z_ },
+			linear_accel_x{ linear_accel_x_ },
+			linear_accel_y{ linear_accel_y_ },
+			linear_accel_z{ linear_accel_z_ },
+			rotation_vec_x{ rotation_vec_x_ },
+			rotation_vec_y{ rotation_vec_y_ },
+			rotation_vec_z{ rotation_vec_z_ }
+		{
+		}
+
+		std::string to_str()
+		{
+			std::stringstream ss;
+			ss << "Android Sensor Data {" << "\n";
+			ss << "		sender addr: " << sender_addr << "\n";
+			ss << "		accel: " << accel_x << "," << accel_y << "," << accel_z << "\n";
+			ss << "		gyro: " << gyro_x << "," << gyro_y << "," << gyro_z << "\n";
+			ss << "		orientation: " << orientation_x << "," << orientation_y << "," << orientation_z << "\n";
+			ss << "		linear accel: " << linear_accel_x << "," << linear_accel_y << "," << linear_accel_z << "\n";
+			ss << "		rotation vect: " << rotation_vec_x << "," << rotation_vec_y << "," << rotation_vec_z << "\n";
+			ss << "}";
+			return ss.str();
+		}
+	};
+
     namespace vision
     {
+
         class InteractionLog
         {
         private:
@@ -32,21 +78,25 @@ namespace topviewkinect
             int dataset_size;
             std::string dataset_directory;
 
-            // Data
+            // Kinect Data Directories
             std::string depth_directory;
             std::string infrared_directory;
             std::string low_infrared_directory;
             std::string rgb_directory;
 
+			// Android sensor data
+			std::map<int, std::vector<topviewkinect::AndroidSensorData>> android_sensor_data;
+
             // TODO: real-time tracking log
             //std::ofstream tracking_csv;
 
             // Replay
-            std::map<int, std::tuple<std::string, std::string>> dataset_frames;
-            std::map<int, std::tuple<std::string, std::string>>::iterator dataset_frames_it;
+            std::map<int, std::tuple<std::string, std::string, std::string>> dataset_frames;
+            std::map<int, std::tuple<std::string, std::string, std::string>>::iterator dataset_frames_it;
 
             // Capture
             std::ofstream timeseries_csv;
+			std::ofstream android_sensor_data_csv;
 
             // Postprocess
             std::ofstream features_csv;
@@ -66,14 +116,15 @@ namespace topviewkinect
 
             // Replay
             bool load_directories();
-            const std::map<int, std::tuple<std::string, std::string>> get_dataset_frames() const;
-            const std::pair<int, std::tuple<std::string, std::string>> current_frames();
-            const std::pair<int, std::tuple<std::string, std::string>> next_frames();
-            const std::pair<int, std::tuple<std::string, std::string>> previous_frames();
+            const std::map<int, std::tuple<std::string, std::string, std::string>> get_dataset_frames() const;
+            const std::pair<int, std::tuple<std::string, std::string, std::string>> current_frames();
+            const std::pair<int, std::tuple<std::string, std::string, std::string>> next_frames();
+            const std::pair<int, std::tuple<std::string, std::string, std::string>> previous_frames();
 
             // Capture
             bool create_directories();
-            void save_multisource_frames(signed long long depth_frame_timestamp, const cv::Mat& depth_frame, signed long long infrared_frame_timestamp = -1, const cv::Mat& infrared_frame = cv::Mat(), const cv::Mat& low_infrared_frame = cv::Mat(), signed long long rgb_frame_timestamp = -1, const cv::Mat& rgb_frame = cv::Mat());
+            void save_multisource_frames(signed long long kinect_timestamp, const cv::Mat& depth_frame, signed long long infrared_frame_timestamp = -1, const cv::Mat& infrared_frame = cv::Mat(), const cv::Mat& low_infrared_frame = cv::Mat(), signed long long rgb_frame_timestamp = -1, const cv::Mat& rgb_frame = cv::Mat());
+			void save_android_sensor_data(signed long long kinect_timestamp, topviewkinect::AndroidSensorData data);
             void save_visualization(const int frame_id, const cv::Mat& visualization_frame);
 
             // Postprocess

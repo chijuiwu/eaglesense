@@ -24,6 +24,7 @@ You should have received a copy of the GNU General Public License along with thi
 #include <string>
 #include <vector>
 
+#include "thirdparty/openpose/openpose_wrapper.h"
 #include "topviewkinect/topviewkinect.h"
 #include "topviewkinect/skeleton/skeleton.h"
 #include "topviewkinect/vision/classifier.h"
@@ -48,7 +49,12 @@ namespace topviewkinect
             signed long long kinect_depth_frame_timestamp;
             signed long long kinect_infrared_frame_timestamp;
             signed long long kinect_rgb_frame_timestamp;
-            void apply_kinect_multisource_frame(const int frame_id, const cv::Mat& depth_frame, const cv::Mat& infrared_frame = cv::Mat());
+            void apply_kinect_multisource_frame(const int frame_id, const cv::Mat& depth_frame, const cv::Mat& infrared_frame = cv::Mat(), const cv::Mat& rgb_frame = cv::Mat());
+
+			// OpenPose wrapper
+			op::Wrapper<std::vector<thirdparty::openpose::UserDatum>> op_wrapper{ op::ThreadManagerMode::Asynchronous };
+			bool op_processing;
+			std::vector<thirdparty::openpose::Skeleton> op_skeletons;
 
             // Background extraction
             int current_num_background_frames;
@@ -75,6 +81,7 @@ namespace topviewkinect
 
             bool inside_acitivty_tracking_zone(const cv::Mat& skeleton_depth_frame, int offset_x, int offset_y) const;
             void detect_skeletons();
+			void combine_openpose_and_depth();
             void compute_skeleton_features();
 
             // Features
@@ -110,6 +117,7 @@ namespace topviewkinect
             // Capture
             bool create_dataset(const int dataset_id);
             bool save_kinect_frames();
+			bool save_android_sensor_data(topviewkinect::AndroidSensorData data);
             bool save_visualization();
 
             // Postprocess

@@ -36,6 +36,7 @@ namespace topviewkinect
 		InteractionLog::~InteractionLog()
 		{
 			this->timeseries_csv.close();
+			this->android_sensor_data_csv.close();
 			this->features_csv.close();
 			this->labels_csv.close();
 			this->description_json.close();
@@ -131,28 +132,68 @@ namespace topviewkinect
 					infrared_frame_filepath_ss << this->low_infrared_directory << "/" << frame_id << ".jpeg";
 					std::string infrared_frame_filepath = infrared_frame_filepath_ss.str();
 
-					this->dataset_frames[frame_id] = std::make_tuple(depth_frame_filepath, infrared_frame_filepath);
+					std::ostringstream rgb_frame_filepath_ss;
+					rgb_frame_filepath_ss << this->rgb_directory << "/" << frame_id << ".jpeg";
+					std::string rgb_frame_filepath = rgb_frame_filepath_ss.str();
+
+					this->dataset_frames[frame_id] = std::make_tuple(depth_frame_filepath, infrared_frame_filepath, rgb_frame_filepath);
 				}
 			}
 			this->dataset_frames_it = this->dataset_frames.begin();
 
+			// Load Android sensor data
+			std::ifstream android_sensor_data_csv(this->dataset_directory + "/android_sensor_data.csv");
+			std::string ignored_header;
+			std::getline(android_sensor_data_csv, ignored_header);
+			while (android_sensor_data_csv.good())
+			{
+				std::string entry;
+				std::getline(android_sensor_data_csv, entry);
+				if (entry.empty())
+				{
+					break;
+				}
+
+				std::vector<std::string> entry_delimited;
+				std::stringstream ss(entry);
+				while (ss)
+				{
+					std::string substr;
+					std::getline(ss, substr, ',');
+					entry_delimited.push_back(substr);
+				}
+
+				int frame_id = stoi(entry_delimited[0]);
+				std::map<int, std::vector<topviewkinect::AndroidSensorData>>::iterator sensor_data_it = this->android_sensor_data.find(frame_id);
+				if (sensor_data_it == this->android_sensor_data.end())
+				{
+					this->android_sensor_data[frame_id] = {};
+				}
+
+				topviewkinect::AndroidSensorData data_entry{ static_cast<float>(std::stod(entry_delimited[3])), static_cast<float>(std::stod(entry_delimited[4])), static_cast<float>(std::stod(entry_delimited[5])), static_cast<float>(std::stod(entry_delimited[6])), static_cast<float>(std::stod(entry_delimited[7])), static_cast<float>(std::stod(entry_delimited[8])), static_cast<float>(std::stod(entry_delimited[9])), static_cast<float>(std::stod(entry_delimited[10])), static_cast<float>(std::stod(entry_delimited[11])), static_cast<float>(std::stod(entry_delimited[12])), static_cast<float>(std::stod(entry_delimited[13])), static_cast<float>(std::stod(entry_delimited[14])), static_cast<float>(std::stod(entry_delimited[15])), static_cast<float>(std::stod(entry_delimited[16])), static_cast<float>(std::stod(entry_delimited[17])) };
+				this->android_sensor_data[frame_id].push_back(data_entry);
+			}
+
+			std::cout << "test: " << this->android_sensor_data[2038][0].to_str() << std::endl;
+
+			// Postprocessing data
 			this->processing_csv = std::ofstream(this->dataset_directory + "/processing.csv");
 			this->processing_csv << "frame_id,features_time,total_time\n";
 
 			return true;
 		}
 
-		const std::map<int, std::tuple<std::string, std::string>> InteractionLog::get_dataset_frames() const
+		const std::map<int, std::tuple<std::string, std::string, std::string>> InteractionLog::get_dataset_frames() const
 		{
 			return this->dataset_frames;
 		}
 
-		const std::pair<int, std::tuple<std::string, std::string>> InteractionLog::current_frames()
+		const std::pair<int, std::tuple<std::string, std::string, std::string>> InteractionLog::current_frames()
 		{
 			return std::make_pair(this->dataset_frames_it->first, this->dataset_frames_it->second);
 		}
 
-		const std::pair<int, std::tuple<std::string, std::string>> InteractionLog::next_frames()
+		const std::pair<int, std::tuple<std::string, std::string, std::string>> InteractionLog::next_frames()
 		{
 			if (!(this->dataset_frames_it != this->dataset_frames.end() && this->dataset_frames_it == --this->dataset_frames.end()))
 			{
@@ -161,7 +202,7 @@ namespace topviewkinect
 			return std::make_pair(this->dataset_frames_it->first, this->dataset_frames_it->second);
 		}
 
-		const std::pair<int, std::tuple<std::string, std::string>> InteractionLog::previous_frames()
+		const std::pair<int, std::tuple<std::string, std::string, std::string>> InteractionLog::previous_frames()
 		{
 			if (this->dataset_frames_it != this->dataset_frames.begin())
 			{
@@ -188,10 +229,13 @@ namespace topviewkinect
 			this->timeseries_csv = std::ofstream(this->dataset_directory + "/timeseries.csv");
 			this->timeseries_csv << "frame_id,depth_time,infrared_time,rgb_time" << "\n";
 
+			this->android_sensor_data_csv = std::ofstream(this->dataset_directory + "/android_sensor_data.csv");
+			this->android_sensor_data_csv << "frame_id,depth_time,addr,accel_x,accel_y,accel_z,gyro_x,gyro_y,gyro_z,orientation_x,orientation_y,orientation_z,linear_accel_x,linear_accel_y,linear_accel_z,rotation_vec_x,rotation_vec_y,rotation_vec_z" << "\n";
+
 			return true;
 		}
 
-		void InteractionLog::save_multisource_frames(signed long long depth_frame_timestamp, const cv::Mat& depth_frame, signed long long infrared_frame_timestamp, const cv::Mat& infrared_frame, const cv::Mat& low_infrared_frame, signed long long rgb_frame_timestamp, const cv::Mat& rgb_frame)
+		void InteractionLog::save_multisource_frames(signed long long kinect_timestamp, const cv::Mat& depth_frame, signed long long infrared_frame_timestamp, const cv::Mat& infrared_frame, const cv::Mat& low_infrared_frame, signed long long rgb_frame_timestamp, const cv::Mat& rgb_frame)
 		{
 			std::ostringstream depth_image_ss;
 			depth_image_ss << this->depth_directory << "/" << this->dataset_size << ".jpeg";
@@ -212,10 +256,15 @@ namespace topviewkinect
 				cv::imwrite(rgb_image_ss.str(), rgb_frame);
 			}
 
-			this->timeseries_csv << this->dataset_size << "," << depth_frame_timestamp << "," << infrared_frame_timestamp << "," << rgb_frame_timestamp << "\n";
+			this->timeseries_csv << this->dataset_size << "," << kinect_timestamp << "," << infrared_frame_timestamp << "," << rgb_frame_timestamp << "\n";
 
 			topviewkinect::util::log_println("Captured " + std::to_string(dataset_size));
 			++this->dataset_size;
+		}
+
+		void InteractionLog::save_android_sensor_data(signed long long kinect_timestamp, topviewkinect::AndroidSensorData data)
+		{
+			this->android_sensor_data_csv << this->dataset_size << "," << kinect_timestamp << "," << "0.0.0.0" << "," << std::setprecision(5) << data.accel_x << "," << data.accel_y << "," << data.accel_z << "," << data.gyro_x << "," << data.gyro_y << "," << data.gyro_z << "," << data.orientation_x << "," << data.orientation_y << "," << data.orientation_z << "," << data.linear_accel_x << "," << data.linear_accel_y << "," << data.linear_accel_z << "," << data.rotation_vec_x << "," << data.rotation_vec_y << "," << data.rotation_vec_z << "\n";
 		}
 
 		void InteractionLog::save_visualization(const int frame_id, const cv::Mat& visualization_frame)
@@ -282,7 +331,7 @@ namespace topviewkinect
 
 				// Features
 				const std::array<double, topviewkinect::vision::NUM_FEATURES> skeleton_features = skeleton.get_features();
-				this->features_csv << frame_id << "," << skeleton.get_id() << "," << head.x << "," << head.y << "," << head.z << ",";
+				this->features_csv << frame_id << "," << skeleton.get_id() << "," << std::setprecision(5) << head.x << "," << head.y << "," << head.z << ",";
 				for (size_t i = 0; i < skeleton_features.size(); ++i)
 				{
 					this->features_csv << skeleton_features[i];

@@ -27,7 +27,7 @@ namespace topviewkinect
 
         // Background subtraction
         static const int REQUIRED_BACKGROUND_FRAMES = 120;
-        static const int FOREGROUND_MEDIAN_FILTER_SIZE = 5;
+        static const int FOREGROUND_FILTER_KERNEL = 5;
 
         // Skeleton
         static const double BODY_CONTOUR_MIN_AREA = area_pixel_ratio * M_PI * 50 * 50;

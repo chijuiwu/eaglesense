@@ -9,10 +9,6 @@
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
       <Extensions>h;hh;hpp;hxx;hm;inl;inc;xsd</Extensions>
     </Filter>
-    <Filter Include="Resource Files">
-      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
-    </Filter>
     <Filter Include="Source Files\topviewkinect">
       <UniqueIdentifier>{eadbb9bd-e9f0-455a-a79e-e7e4f3c74796}</UniqueIdentifier>
     </Filter>
@@ -30,6 +26,25 @@
     </Filter>
     <Filter Include="Source Files\topviewkinect\vision">
       <UniqueIdentifier>{ac9d28b7-4dff-442d-80ac-6630f1b8b5db}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\thirdparty">
+      <UniqueIdentifier>{7898b11f-584e-470b-8ac8-ca1883f1bfe0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\thirdparty\openpose">
+      <UniqueIdentifier>{35804f04-b096-480c-bc07-2f9cb39c8187}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\thirdparty">
+      <UniqueIdentifier>{60da4118-55c5-4bf2-b4ba-3a790c456181}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\thirdparty\openpose">
+      <UniqueIdentifier>{fc651ce9-6de1-42f0-92ef-86cbb22e9df4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\thirdparty\mpi">
+      <UniqueIdentifier>{80ec5ef0-41a7-4edc-b1b0-f8dbafd6160a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\topviewkinect\Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -72,6 +87,39 @@
     <ClInclude Include="include\topviewkinect\util.h">
       <Filter>Header Files\topviewkinect</Filter>
     </ClInclude>
+    <ClInclude Include="include\thirdparty\openpose\openpose_wrapper.h">
+      <Filter>Header Files\thirdparty\openpose</Filter>
+    </ClInclude>
+    <ClInclude Include="include\thirdparty\mpi\colorcode.h">
+      <Filter>Header Files\thirdparty\mpi</Filter>
+    </ClInclude>
+    <ClInclude Include="include\thirdparty\mpi\Convert.h">
+      <Filter>Header Files\thirdparty\mpi</Filter>
+    </ClInclude>
+    <ClInclude Include="include\thirdparty\mpi\Convolve.h">
+      <Filter>Header Files\thirdparty\mpi</Filter>
+    </ClInclude>
+    <ClInclude Include="include\thirdparty\mpi\Copyright.h">
+      <Filter>Header Files\thirdparty\mpi</Filter>
+    </ClInclude>
+    <ClInclude Include="include\thirdparty\mpi\Error.h">
+      <Filter>Header Files\thirdparty\mpi</Filter>
+    </ClInclude>
+    <ClInclude Include="include\thirdparty\mpi\flowIO.h">
+      <Filter>Header Files\thirdparty\mpi</Filter>
+    </ClInclude>
+    <ClInclude Include="include\thirdparty\mpi\Image.h">
+      <Filter>Header Files\thirdparty\mpi</Filter>
+    </ClInclude>
+    <ClInclude Include="include\thirdparty\mpi\ImageIO.h">
+      <Filter>Header Files\thirdparty\mpi</Filter>
+    </ClInclude>
+    <ClInclude Include="include\thirdparty\mpi\imageLib.h">
+      <Filter>Header Files\thirdparty\mpi</Filter>
+    </ClInclude>
+    <ClInclude Include="include\thirdparty\mpi\RefCntMem.h">
+      <Filter>Header Files\thirdparty\mpi</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="source\stdafx.cpp">
@@ -100,6 +148,36 @@
     </ClCompile>
     <ClCompile Include="topviewkinect.cpp">
       <Filter>Source Files\topviewkinect</Filter>
+    </ClCompile>
+    <ClCompile Include="include\thirdparty\mpi\color_flow.cpp">
+      <Filter>Header Files\thirdparty\mpi</Filter>
+    </ClCompile>
+    <ClCompile Include="include\thirdparty\mpi\colorcode.cpp">
+      <Filter>Header Files\thirdparty\mpi</Filter>
+    </ClCompile>
+    <ClCompile Include="include\thirdparty\mpi\colortest.cpp">
+      <Filter>Header Files\thirdparty\mpi</Filter>
+    </ClCompile>
+    <ClCompile Include="include\thirdparty\mpi\Convert.cpp">
+      <Filter>Header Files\thirdparty\mpi</Filter>
+    </ClCompile>
+    <ClCompile Include="include\thirdparty\mpi\Convolve.cpp">
+      <Filter>Header Files\thirdparty\mpi</Filter>
+    </ClCompile>
+    <ClCompile Include="include\thirdparty\mpi\flowIO.cpp">
+      <Filter>Header Files\thirdparty\mpi</Filter>
+    </ClCompile>
+    <ClCompile Include="include\thirdparty\mpi\Image.cpp">
+      <Filter>Header Files\thirdparty\mpi</Filter>
+    </ClCompile>
+    <ClCompile Include="include\thirdparty\mpi\ImageIO.cpp">
+      <Filter>Header Files\thirdparty\mpi</Filter>
+    </ClCompile>
+    <ClCompile Include="include\thirdparty\mpi\ImageIOpng.cpp">
+      <Filter>Header Files\thirdparty\mpi</Filter>
+    </ClCompile>
+    <ClCompile Include="include\thirdparty\mpi\RefCntMem.cpp">
+      <Filter>Header Files\thirdparty\mpi</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

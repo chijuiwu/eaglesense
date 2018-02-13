@@ -17,26 +17,110 @@ You should have received a copy of the GNU General Public License along with thi
 #include <opencv2/highgui.hpp>
 
 #include <boost/program_options.hpp>
+#include <boost/asio.hpp>
+#include <boost/bind.hpp>
 
+#include <iostream>
+#include <thread>
 #include <string>
 #include <sstream>
 #include <vector>
+#include <winsock2.h>
+#include <Ws2tcpip.h>
+#include <stdio.h>
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#define DATA_BUFSIZE 4096
 
 #include "topviewkinect/topviewkinect.h"
+#include "topviewkinect/vision/space.h"
+#include "topviewkinect/vision/log.h"
 #include "topviewkinect/kinect2.h"
 #include "topviewkinect/color.h"
 #include "topviewkinect/util.h"
-#include "topviewkinect/vision/space.h"
 
 static constexpr const char* DEPTH_WINDOW_NAME = "Top-View Kinect Depth";
 static constexpr const char* INFRARED_WINDOW_NAME = "Top-View Kinect Infrared";
 static constexpr const char* RGB_WINDOW_NAME = "Top-View Kinect RGB";
 static constexpr const char* SPACE_WINDOW_NAME = "Top-View Interactive Space";
+static constexpr const char* SPACE_ENLARGED_WINDOW_NAME = "Top-View Interactive Space (Zoom-in)";
 
 static int start();
 static int replay(const int dataset_id);
 static int capture(const int dataset_id);
 static int postprocess(const int dataset_id, const std::string& dataset_name, const bool keep_label);
+
+class HelloWorldServer {
+	public:
+		HelloWorldServer(boost::asio::io_service& io_service)
+			: _socket(io_service, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), 8888))
+		{
+			try_receive();
+		}
+
+		float accel_x, accel_y, accel_z;
+		float gyro_x, gyro_y, gyro_z;
+		float orientation_x, orientation_y, orientation_z;
+		float linear_accel_x, linear_accel_y, linear_accel_z;
+		float rotation_vec_x, rotation_vec_y, rotation_vec_z;
+
+		topviewkinect::AndroidSensorData get_android_sensor_data()
+		{
+			topviewkinect::AndroidSensorData data = { accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z, orientation_x, orientation_y, orientation_z, linear_accel_x, linear_accel_y, linear_accel_z, rotation_vec_x, rotation_vec_y, rotation_vec_z };
+			return data;
+		}
+
+	private:
+		void try_receive() {
+			_socket.async_receive_from(
+				boost::asio::buffer(_data, buffer_size-1), _sender_endpoint,
+				boost::bind(&HelloWorldServer::handle_receive, this,
+					boost::asio::placeholders::error,
+					boost::asio::placeholders::bytes_transferred));
+		}
+
+		void handle_receive(const boost::system::error_code& error,
+			std::size_t bytes_transferred) {
+			if (!error || error == boost::asio::error::message_size) {
+				std::string sensor_data_str(&_data[0], &_data[0] + bytes_transferred);
+				
+				std::vector<float> sensor_data_delimited;
+				std::stringstream ss(sensor_data_str);
+
+				while (ss.good())
+				{
+					std::string substr;
+					std::getline(ss, substr, ',');
+					sensor_data_delimited.push_back(std::stof(substr));
+				}
+
+				accel_x = sensor_data_delimited[2], accel_y = sensor_data_delimited[3], accel_z = sensor_data_delimited[4];
+				gyro_x = sensor_data_delimited[6], gyro_y = sensor_data_delimited[7], gyro_z = sensor_data_delimited[8];
+				orientation_x = sensor_data_delimited[14], orientation_y = sensor_data_delimited[15], orientation_z = sensor_data_delimited[16];
+				linear_accel_x = sensor_data_delimited[18], linear_accel_y = sensor_data_delimited[19], linear_accel_z = sensor_data_delimited[20];
+				rotation_vec_x = sensor_data_delimited[22], rotation_vec_y = sensor_data_delimited[23], rotation_vec_z = sensor_data_delimited[24];
+
+				topviewkinect::util::log_println(sensor_data_str);
+				//std::cout << "accl: " << accl_x << " , " << accl_y << " , " << accl_z << std::endl;
+				//std::cout << "gyro: " << gyro_x << " , " << gyro_y << " , " << gyro_z << std::endl;
+				//std::cout << "oren: " << oren_x << " , " << oren_y << " , " << oren_z << std::endl;
+				//std::cout << "lina: " << lina_x << " , " << lina_y << " , " << lina_z << std::endl;
+				//std::cout << "rotv: " << rotv_x << " , " << rotv_y << " , " << rotv_z << std::endl;
+
+				try_receive();
+			}
+		}
+
+		void handle_send(std::shared_ptr<std::string> message,
+			const boost::system::error_code& ec,
+			std::size_t bytes_transferred) {
+			try_receive();
+		}
+
+		boost::asio::ip::udp::socket _socket;
+		boost::asio::ip::udp::endpoint _sender_endpoint;
+		const static int buffer_size = 1024;
+		std::array<char, buffer_size> _data;
+};
 
 int main(int argc, char* argv[])
 {
@@ -135,6 +219,12 @@ int main(int argc, char* argv[])
 
 static int start()
 {
+	topviewkinect::util::log_println("Start server ...");
+
+	boost::asio::io_service io_service;
+	HelloWorldServer server{ io_service };
+	std::thread thread1([&io_service]() { io_service.run(); });
+
     topviewkinect::util::log_println("Tracking ...");
 
     // Create interactive space
@@ -179,6 +269,8 @@ static int start()
         }
     }
 
+	io_service.stop();
+	thread1.join();
     topviewkinect::util::log_println("Done!");
     return EXIT_SUCCESS;
 }
@@ -208,8 +300,9 @@ static int replay(const int dataset_id)
 	cv::namedWindow(DEPTH_WINDOW_NAME);
 	cv::namedWindow(INFRARED_WINDOW_NAME);
 	cv::namedWindow(SPACE_WINDOW_NAME);
-	const cv::Size enlarged_size = cv::Size(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE.width * 2, topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE.height * 2);
-	cv::Mat visualization_frame_enlarged = cv::Mat::zeros(enlarged_size, CV_8UC3);
+	//cv::namedWindow(SPACE_ENLARGED_WINDOW_NAME);
+	//const cv::Size enlarged_size = cv::Size(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE.width * 2, topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE.height * 2);
+	//cv::Mat visualization_frame_enlarged = cv::Mat::zeros(enlarged_size, CV_8UC3);
 
     // Replay
     while (true)
@@ -217,16 +310,17 @@ static int replay(const int dataset_id)
         cv::Mat depth_frame = m_space.get_depth_frame();
         cv::Mat infrared_frame = m_space.get_infrared_frame();
         cv::Mat visualization_frame = m_space.get_visualization_frame();
-		cv::resize(visualization_frame, visualization_frame_enlarged, visualization_frame_enlarged.size(), 0, 0, cv::INTER_LINEAR);
+		//cv::resize(visualization_frame, visualization_frame_enlarged, visualization_frame_enlarged.size(), 0, 0, cv::INTER_LINEAR);
 
         // Visualize tracking
         const int frame_id = m_space.get_kinect_frame_id();
         cv::putText(depth_frame, std::to_string(frame_id), cv::Point(20, 20), cv::FONT_HERSHEY_SIMPLEX, 0.3, topviewkinect::color::CV_WHITE);
         cv::putText(infrared_frame, std::to_string(frame_id), cv::Point(20, 20), cv::FONT_HERSHEY_SIMPLEX, 0.3, topviewkinect::color::CV_WHITE);
-        cv::putText(visualization_frame_enlarged, std::to_string(frame_id), cv::Point(20, 20), cv::FONT_HERSHEY_SIMPLEX, 0.3, topviewkinect::color::CV_BGR_WHITE);
+        cv::putText(visualization_frame, std::to_string(frame_id), cv::Point(20, 20), cv::FONT_HERSHEY_SIMPLEX, 0.3, topviewkinect::color::CV_BGR_WHITE);
         cv::imshow(DEPTH_WINDOW_NAME, depth_frame);
         cv::imshow(INFRARED_WINDOW_NAME, infrared_frame);
-        cv::imshow(SPACE_WINDOW_NAME, visualization_frame_enlarged);
+		cv::imshow(SPACE_WINDOW_NAME, visualization_frame);
+        //cv::imshow(SPACE_ENLARGED_WINDOW_NAME, visualization_frame_enlarged);
 
         // Windows
         int ascii_keypress = cv::waitKeyEx(0);
@@ -254,6 +348,12 @@ static int replay(const int dataset_id)
 
 static int capture(const int dataset_id)
 {
+	topviewkinect::util::log_println("Start server ...");
+
+	boost::asio::io_service io_service;
+	HelloWorldServer server{ io_service };
+	std::thread thread1([&io_service]() { io_service.run(); });
+
     topviewkinect::util::log_println("Capturing ...");
 
     // Create interactive space
@@ -278,7 +378,7 @@ static int capture(const int dataset_id)
     {
         cv::imshow(DEPTH_WINDOW_NAME, m_space.get_depth_frame());
         cv::imshow(INFRARED_WINDOW_NAME, m_space.get_infrared_frame());
-        cv::imshow(SPACE_WINDOW_NAME, m_space.get_visualization_frame());
+        cv::imshow(SPACE_WINDOW_NAME, m_space.get_rgb_frame());
 
         int ascii_keypress = cv::waitKey(30); // 30 fps
         if (ascii_keypress != -1)
@@ -291,9 +391,12 @@ static int capture(const int dataset_id)
         if (frame_received)
         {
             m_space.save_kinect_frames();
+			m_space.save_android_sensor_data(server.get_android_sensor_data());
         }
     }
 
+	io_service.stop();
+	thread1.join();
     topviewkinect::util::log_println("Done!");
     return EXIT_SUCCESS;
 }
