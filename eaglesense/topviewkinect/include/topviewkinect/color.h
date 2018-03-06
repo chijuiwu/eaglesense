@@ -25,6 +25,7 @@ namespace topviewkinect
         static const cv::Scalar CV_BGR_BLACK(0, 0, 0);
         static const cv::Scalar CV_BGR_GREY(150, 150, 150);
         static const cv::Scalar CV_BGR_RED(82, 68, 204);
+		static const cv::Scalar CV_BGR_GREEN(82, 204, 68);
 
         static const float SKELETON_OVERLAY_ALPHA = 0.5f;
         static const std::vector<cv::Scalar> CV_BGR_SKELETON{ cv::Scalar(217,161,0), cv::Scalar(241,90,90), cv::Scalar(78,186,111), cv::Scalar(149,91,165), cv::Scalar(240,196,25), cv::Scalar(238,62,32) };

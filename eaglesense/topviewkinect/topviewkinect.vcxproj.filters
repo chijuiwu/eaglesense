@@ -131,9 +131,6 @@
     <ClCompile Include="source\skeleton\skeleton.cpp">
       <Filter>Source Files\topviewkinect\skeleton</Filter>
     </ClCompile>
-    <ClCompile Include="source\main.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="source\vision\classifier.cpp">
       <Filter>Source Files\topviewkinect\vision</Filter>
     </ClCompile>
@@ -178,6 +175,9 @@
     </ClCompile>
     <ClCompile Include="include\thirdparty\mpi\RefCntMem.cpp">
       <Filter>Header Files\thirdparty\mpi</Filter>
+    </ClCompile>
+    <ClCompile Include="source\main.cpp">
+      <Filter>Source Files\topviewkinect\vision</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

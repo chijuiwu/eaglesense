@@ -21,12 +21,20 @@ You should have received a copy of the GNU General Public License along with thi
 #include <limits>
 #include <numeric>
 #include <algorithm>
+#include <iostream>
+#include <iomanip>
+#include <memory>
+#include <exception>
+#include <ctime>
+#include <ctype.h>
 
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/features2d/features2d.hpp>
 #include <opencv2/objdetect.hpp>
 #include <opencv2/shape/shape_distance.hpp>
+#include <opencv2/cudaoptflow.hpp>
+#include <opencv2/cudaarithm.hpp>
 
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
@@ -184,6 +192,9 @@ namespace topviewkinect
 			kinect_infrared_frame_timestamp(0),
 			kinect_rgb_frame_timestamp(0),
 
+			// Optflow
+			brox_optflow(cv::cuda::BroxOpticalFlow::create(0.197f, 50.0f, 0.8f, 10, 77, 10)),
+
 			// Background extraction
 			current_num_background_frames(topviewkinect::vision::REQUIRED_BACKGROUND_FRAMES),
 			foreground_mask(cv::Mat::zeros(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE, CV_8UC1)),
@@ -196,6 +207,7 @@ namespace topviewkinect
 			low_infrared_frame(cv::Mat::zeros(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE, CV_8UC1)),
 			rgb_frame(cv::Mat::zeros(topviewkinect::kinect2::CV_COLOR_FRAME_SIZE_DOWNSAMPLED, CV_8UC4)),
 			visualization_frame(cv::Mat::zeros(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE, CV_8UC3)),
+			android_sensor_frame(cv::Mat::zeros(cv::Size(1000, 1000), CV_8UC3)),
 
 			// RESTful client
 			restful_client(NULL)
@@ -302,48 +314,48 @@ namespace topviewkinect
 			}
 			topviewkinect::util::log_println("Connected to Kinect!!!");
 
-			// OpenPose
-			const auto OP_POSE_ENABLE = true;
-			const auto OP_POSE_NET_INPUT_SIZE = op::Point<int>{ 1280, 720 };
-			const auto OP_POSE_NET_OUTPUT_SIZE = op::Point<int>{ -1, -1 };
-			const auto OP_POSE_KEY_POINT_SCALE = op::ScaleMode::InputResolution;
-			const auto OP_POSE_GPU_NUMBER = -1;
-			const auto OP_POSE_GPU_START = 0;
-			const auto OP_POSE_SCALE_NUMBER = 1;
-			const auto OP_POSE_SCALE_GAP = 0.3f;
-			const auto OP_RENDER_POSE = op::RenderMode::Gpu;
-			const auto OP_POSE_MODEL = op::PoseModel::COCO_18;
-			const auto OP_POSE_BELND_ORIGINAL_FRAME = true;
-			const auto OP_POSE_ALPHA = 0.6f;
-			const auto OP_POSE_ALPHA_HEATMAP = 0.7f;
-			const auto OP_POSE_PART_RENDER = 0;
-			const auto OP_POSE_MODEL_FOLDER = "D:\\p_eaglesense\\eaglesense\\3rdparty\\openpose\\models";
-			const std::vector<op::HeatMapType> OP_POSE_HEATMAP_TYPES = {};
-			const auto OP_POSE_HEATMAP_SCALE = op::ScaleMode::UnsignedChar;
-			const auto OP_POSE_ADD_PARTS_CANDIDATES = false;
-			const auto OP_POSE_RENDER_THRESHOLD = 0.05f;
-			const auto OP_POSE_GOOGLE_LOGGING = false;
-			const auto OP_POSE_IDENTIFICATION = false;
+			//// OpenPose
+			//const auto OP_POSE_ENABLE = true;
+			//const auto OP_POSE_NET_INPUT_SIZE = op::Point<int>{ 1280, 720 };
+			//const auto OP_POSE_NET_OUTPUT_SIZE = op::Point<int>{ -1, -1 };
+			//const auto OP_POSE_KEY_POINT_SCALE = op::ScaleMode::InputResolution;
+			//const auto OP_POSE_GPU_NUMBER = -1;
+			//const auto OP_POSE_GPU_START = 0;
+			//const auto OP_POSE_SCALE_NUMBER = 1;
+			//const auto OP_POSE_SCALE_GAP = 0.3f;
+			//const auto OP_RENDER_POSE = op::RenderMode::Gpu;
+			//const auto OP_POSE_MODEL = op::PoseModel::COCO_18;
+			//const auto OP_POSE_BELND_ORIGINAL_FRAME = true;
+			//const auto OP_POSE_ALPHA = 0.6f;
+			//const auto OP_POSE_ALPHA_HEATMAP = 0.7f;
+			//const auto OP_POSE_PART_RENDER = 0;
+			//const auto OP_POSE_MODEL_FOLDER = "D:\\p_eaglesense\\eaglesense\\3rdparty\\openpose\\models";
+			//const std::vector<op::HeatMapType> OP_POSE_HEATMAP_TYPES = {};
+			//const auto OP_POSE_HEATMAP_SCALE = op::ScaleMode::UnsignedChar;
+			//const auto OP_POSE_ADD_PARTS_CANDIDATES = false;
+			//const auto OP_POSE_RENDER_THRESHOLD = 0.05f;
+			//const auto OP_POSE_GOOGLE_LOGGING = false;
+			//const auto OP_POSE_IDENTIFICATION = false;
 
-			const op::WrapperStructPose wrapper_struct_pose{ OP_POSE_ENABLE, OP_POSE_NET_INPUT_SIZE, OP_POSE_NET_OUTPUT_SIZE, OP_POSE_KEY_POINT_SCALE, OP_POSE_GPU_NUMBER, OP_POSE_GPU_START, OP_POSE_SCALE_NUMBER, OP_POSE_SCALE_GAP, OP_RENDER_POSE, OP_POSE_MODEL, OP_POSE_BELND_ORIGINAL_FRAME, OP_POSE_ALPHA, OP_POSE_ALPHA_HEATMAP, OP_POSE_PART_RENDER, OP_POSE_MODEL_FOLDER, OP_POSE_HEATMAP_TYPES, OP_POSE_HEATMAP_SCALE, OP_POSE_ADD_PARTS_CANDIDATES, OP_POSE_RENDER_THRESHOLD, OP_POSE_GOOGLE_LOGGING, OP_POSE_IDENTIFICATION };
+			//const op::WrapperStructPose wrapper_struct_pose{ OP_POSE_ENABLE, OP_POSE_NET_INPUT_SIZE, OP_POSE_NET_OUTPUT_SIZE, OP_POSE_KEY_POINT_SCALE, OP_POSE_GPU_NUMBER, OP_POSE_GPU_START, OP_POSE_SCALE_NUMBER, OP_POSE_SCALE_GAP, OP_RENDER_POSE, OP_POSE_MODEL, OP_POSE_BELND_ORIGINAL_FRAME, OP_POSE_ALPHA, OP_POSE_ALPHA_HEATMAP, OP_POSE_PART_RENDER, OP_POSE_MODEL_FOLDER, OP_POSE_HEATMAP_TYPES, OP_POSE_HEATMAP_SCALE, OP_POSE_ADD_PARTS_CANDIDATES, OP_POSE_RENDER_THRESHOLD, OP_POSE_GOOGLE_LOGGING, OP_POSE_IDENTIFICATION };
 
-			const op::WrapperStructFace wrapper_struct_face{};
-			//const op::WrapperStructFace wrapperStructFace{ FLAGS_face, faceNetInputSize,
-			//	op::flagsToRenderMode(FLAGS_face_render, FLAGS_render_pose),
-			//	(float)FLAGS_face_alpha_pose, (float)FLAGS_face_alpha_heatmap,
-			//	(float)FLAGS_face_render_threshold };
-			//
+			//const op::WrapperStructFace wrapper_struct_face{};
+			////const op::WrapperStructFace wrapperStructFace{ FLAGS_face, faceNetInputSize,
+			////	op::flagsToRenderMode(FLAGS_face_render, FLAGS_render_pose),
+			////	(float)FLAGS_face_alpha_pose, (float)FLAGS_face_alpha_heatmap,
+			////	(float)FLAGS_face_render_threshold };
+			////
 
-			const op::WrapperStructHand wrapper_struct_hand{};
-			//const op::WrapperStructHand wrapperStructHand{ FLAGS_hand, handNetInputSize, FLAGS_hand_scale_number,
-			//	(float)FLAGS_hand_scale_range, FLAGS_hand_tracking,
-			//	op::flagsToRenderMode(FLAGS_hand_render, FLAGS_render_pose),
-			//	(float)FLAGS_hand_alpha_pose, (float)FLAGS_hand_alpha_heatmap,
-			//	(float)FLAGS_hand_render_threshold };
+			//const op::WrapperStructHand wrapper_struct_hand{};
+			////const op::WrapperStructHand wrapperStructHand{ FLAGS_hand, handNetInputSize, FLAGS_hand_scale_number,
+			////	(float)FLAGS_hand_scale_range, FLAGS_hand_tracking,
+			////	op::flagsToRenderMode(FLAGS_hand_render, FLAGS_render_pose),
+			////	(float)FLAGS_hand_alpha_pose, (float)FLAGS_hand_alpha_heatmap,
+			////	(float)FLAGS_hand_render_threshold };
 
-			this->op_wrapper.configure(wrapper_struct_pose, wrapper_struct_face, wrapper_struct_hand, op::WrapperStructInput{}, op::WrapperStructOutput{});
-			this->op_wrapper.start();
-			this->op_processing = false;
+			//this->op_wrapper.configure(wrapper_struct_pose, wrapper_struct_face, wrapper_struct_hand, op::WrapperStructInput{}, op::WrapperStructOutput{});
+			//this->op_wrapper.start();
+			//this->op_processing = false;
 
 			return true;
 		}
@@ -447,8 +459,7 @@ namespace topviewkinect
 
 						// Update depth frame
 						cv::Mat depth_map(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE, CV_16UC1, p_depth_buffer);
-						double scale = 255.0 / (depth_max_distance - depth_min_distance);
-						depth_map.convertTo(this->depth_frame, CV_8UC1, scale);
+						depth_map.convertTo(this->depth_frame, CV_8UC1, 256.0 / 8000.0);
 					}
 
 					delete[] p_depth_buffer;
@@ -491,7 +502,11 @@ namespace topviewkinect
 
 						// Update infrared frame
 						cv::Mat infrared_map(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE, CV_16UC1, p_infrared_buffer);
-						infrared_map.convertTo(this->infrared_frame, CV_8UC1, 1.0 / 255);
+
+						//this->infrared_frame.forEach<uchar>([&](uchar &p, const int* position) {
+						//	p = infrared_map.at<ushort>(position[0], position[1]) >> 8;
+						//});
+						infrared_map.convertTo(this->infrared_frame, CV_8UC1, 256.0 / 8000.0);
 						infrared_map.convertTo(this->low_infrared_frame, CV_8UC1);
 					}
 
@@ -580,6 +595,39 @@ namespace topviewkinect
 			}
 		}
 
+		bool TopViewSpace::refresh_android_sensor_data(const std::deque<topviewkinect::AndroidSensorData>& data)
+		{
+			//this->android_sensor_data = data;
+
+			// update sensor plot
+			this->android_sensor_frame.setTo(topviewkinect::color::CV_BGR_WHITE);
+
+			// device acceleration, X axis
+			int init_x = 20, init_y = 300;
+			cv::line(this->android_sensor_frame, cv::Point(20, init_y), cv::Point(1000, 300), topviewkinect::color::CV_BGR_BLACK, 1);
+			cv::line(this->android_sensor_frame, cv::Point(20, 100), cv::Point(20, 412), topviewkinect::color::CV_BGR_BLACK, 1);
+
+			// device acceleration, Y axis
+			int linear_accel_init_x = 20, linear_accel_init_y = 800;
+			cv::line(this->android_sensor_frame, cv::Point(20, linear_accel_init_y), cv::Point(1000, 800), topviewkinect::color::CV_BGR_BLACK, 1);
+			cv::line(this->android_sensor_frame, cv::Point(20, 500), cv::Point(20, 1000), topviewkinect::color::CV_BGR_BLACK, 1);
+
+
+			// data
+			for (int i = 0; i < data.size(); i++)
+			{
+				const topviewkinect::AndroidSensorData sensor_data = data[i];
+
+				// device linear accel X
+				cv::circle(this->android_sensor_frame, cv::Point(init_x + i * 3, init_y - (sensor_data.linear_accel_x) * 10), 3, topviewkinect::color::CV_BGR_GREEN, -1);
+
+				// device linear accel Y
+				cv::circle(this->android_sensor_frame, cv::Point(linear_accel_init_x + i * 3, linear_accel_init_y - (sensor_data.linear_accel_y) * 10), 3, topviewkinect::color::CV_BGR_RED, -1);
+			}
+
+			return true;
+		}
+
 		const int TopViewSpace::get_kinect_frame_id() const
 		{
 			return this->kinect_frame_id;
@@ -600,21 +648,29 @@ namespace topviewkinect
 			}
 
 			// Perform initial background subtraction
-			const std::map<int, std::tuple<std::string, std::string, std::string>> dataset_frames = this->interaction_log.get_dataset_frames();
+			const std::map<int, std::tuple<std::string, std::string, std::string, std::string>> dataset_frames = this->interaction_log.get_dataset_frames();
 			for (int i = 0; i < topviewkinect::vision::REQUIRED_BACKGROUND_FRAMES; ++i)
 			{
-				std::string depth_background_frame_filepath = std::get<0>(dataset_frames.find(i)->second);
-				cv::Mat depth_background_frame = cv::imread(depth_background_frame_filepath, CV_LOAD_IMAGE_GRAYSCALE);
-				this->apply_kinect_multisource_frame(i, depth_background_frame);
+				std::string depth_bg_frame_filepath = std::get<0>(dataset_frames.find(i)->second);
+				cv::Mat depth_bg_frame = cv::imread(depth_bg_frame_filepath, CV_LOAD_IMAGE_GRAYSCALE);
+
+				std::string infrared_bg_frame_filepath = std::get<1>(dataset_frames.find(i)->second);
+				cv::Mat infrared_bg_frame = cv::imread(infrared_bg_frame_filepath, CV_LOAD_IMAGE_GRAYSCALE);
+				this->apply_kinect_multisource_frame(i, depth_bg_frame, infrared_bg_frame);
 				this->interaction_log.next_frames();
 			}
 
 			// Load first frame
-			const std::pair<int, std::tuple<std::string, std::string, std::string>> next_frames = this->interaction_log.current_frames();
+			const std::pair<int, std::tuple<std::string, std::string, std::string, std::string>> next_frames = this->interaction_log.current_frames();
 			cv::Mat depth_frame = cv::imread(std::get<0>(next_frames.second), CV_LOAD_IMAGE_GRAYSCALE);
 			cv::Mat infrared_frame = cv::imread(std::get<1>(next_frames.second), CV_LOAD_IMAGE_GRAYSCALE);
-			cv::Mat rgb_frame = cv::imread(std::get<2>(next_frames.second), CV_LOAD_IMAGE_COLOR);
-			this->apply_kinect_multisource_frame(next_frames.first, depth_frame, infrared_frame, rgb_frame);
+			cv::Mat low_infrared_frame = cv::imread(std::get<2>(next_frames.second), CV_LOAD_IMAGE_GRAYSCALE);
+			cv::Mat rgb_frame = cv::imread(std::get<3>(next_frames.second), CV_LOAD_IMAGE_COLOR);
+
+			// Load Android sensor data
+			this->android_sensor_data = this->interaction_log.get_android_sensor_data();
+
+			this->apply_kinect_multisource_frame(next_frames.first, depth_frame, infrared_frame, low_infrared_frame, rgb_frame);
 
 			topviewkinect::util::log_println("Dataset (" + std::to_string(dataset_id) + ") Size: " + std::to_string(dataset_frames.size()) + ".");
 			return true;
@@ -622,36 +678,52 @@ namespace topviewkinect
 
 		void TopViewSpace::replay_previous_frame()
 		{
-			const std::pair<int, std::tuple<std::string, std::string, std::string>> next_frames = this->interaction_log.previous_frames();
-			cv::Mat depth_frame = cv::imread(std::get<0>(next_frames.second), CV_LOAD_IMAGE_GRAYSCALE);
-			cv::Mat infrared_frame = cv::imread(std::get<1>(next_frames.second), CV_LOAD_IMAGE_GRAYSCALE);
-			cv::Mat rgb_frame = cv::imread(std::get<2>(next_frames.second), CV_LOAD_IMAGE_COLOR);
-			this->apply_kinect_multisource_frame(next_frames.first, depth_frame, infrared_frame, rgb_frame);
+			const std::pair<int, std::tuple<std::string, std::string, std::string, std::string>> prev_frames = this->interaction_log.previous_frames();
+			cv::Mat depth_frame = cv::imread(std::get<0>(prev_frames.second), CV_LOAD_IMAGE_GRAYSCALE);
+			cv::Mat infrared_frame = cv::imread(std::get<1>(prev_frames.second), CV_LOAD_IMAGE_GRAYSCALE);
+			cv::Mat low_infrared_frame = cv::imread(std::get<2>(prev_frames.second), CV_LOAD_IMAGE_GRAYSCALE);
+			cv::Mat rgb_frame = cv::imread(std::get<3>(prev_frames.second), CV_LOAD_IMAGE_COLOR);
+
+			// Load Android sensor data
+			this->android_sensor_data = this->interaction_log.get_android_sensor_data();
+
+			this->apply_kinect_multisource_frame(prev_frames.first, depth_frame, infrared_frame, low_infrared_frame, rgb_frame);
 		}
 
 		void TopViewSpace::replay_next_frame()
 		{
-			const std::pair<int, std::tuple<std::string, std::string, std::string>> next_frames = this->interaction_log.next_frames();
+			const std::pair<int, std::tuple<std::string, std::string, std::string, std::string>> next_frames = this->interaction_log.next_frames();
 			cv::Mat depth_frame = cv::imread(std::get<0>(next_frames.second), CV_LOAD_IMAGE_GRAYSCALE);
 			cv::Mat infrared_frame = cv::imread(std::get<1>(next_frames.second), CV_LOAD_IMAGE_GRAYSCALE);
-			cv::Mat rgb_frame = cv::imread(std::get<2>(next_frames.second), CV_LOAD_IMAGE_COLOR);
-			this->apply_kinect_multisource_frame(next_frames.first, depth_frame, infrared_frame, rgb_frame);
+			cv::Mat low_infrared_frame = cv::imread(std::get<2>(next_frames.second), CV_LOAD_IMAGE_GRAYSCALE);
+			cv::Mat rgb_frame = cv::imread(std::get<3>(next_frames.second), CV_LOAD_IMAGE_COLOR);
+
+			// Load Android sensor data
+			this->android_sensor_data = this->interaction_log.get_android_sensor_data();
+
+			this->apply_kinect_multisource_frame(next_frames.first, depth_frame, infrared_frame, low_infrared_frame, rgb_frame);
 		}
 
-		void TopViewSpace::apply_kinect_multisource_frame(const int frame_id, const cv::Mat& depth_frame, const cv::Mat& infrared_frame, const cv::Mat& rgb_frame)
+		void TopViewSpace::apply_kinect_multisource_frame(const int frame_id, const cv::Mat& depth_frame, const cv::Mat& infrared_frame, const cv::Mat& low_infrared_frame, const cv::Mat& rgb_frame)
 		{
 			this->kinect_frame_id = frame_id;
 			this->kinect_multisource_frame_arrived = true;
 			depth_frame.copyTo(this->depth_frame);
-			if (!infrared_frame.empty())
+			infrared_frame.copyTo(this->infrared_frame);
+			if (!low_infrared_frame.empty())
 			{
-				infrared_frame.copyTo(this->low_infrared_frame);
+				low_infrared_frame.copyTo(this->low_infrared_frame);
 			}
 			if (!rgb_frame.empty())
 			{
 				rgb_frame.copyTo(this->rgb_frame);
 			}
 			this->process_kinect_frames();
+		}
+
+		void TopViewSpace::apply_android_sensor_data()
+		{
+
 		}
 
 		// Capture
@@ -685,7 +757,7 @@ namespace topviewkinect
 			}
 		}
 
-		bool TopViewSpace::save_android_sensor_data(topviewkinect::AndroidSensorData data)
+		bool TopViewSpace::save_android_sensor_data(const topviewkinect::AndroidSensorData& data)
 		{
 			this->interaction_log.save_android_sensor_data(this->kinect_depth_frame_timestamp, data);
 			return true;
@@ -703,18 +775,19 @@ namespace topviewkinect
 			this->interaction_log.create_postprocessed_files(keep_label);
 
 			// Postprocess images
-			const std::map<int, std::tuple<std::string, std::string, std::string>> dataset_frames = this->interaction_log.get_dataset_frames();
+			const std::map<int, std::tuple<std::string, std::string, std::string, std::string>> dataset_frames = this->interaction_log.get_dataset_frames();
 			const size_t num_total_frames = dataset_frames.size();
 			const int progressbar_step = static_cast<int>(num_total_frames * 0.1);
 			int current_frame_idx = 0;
 			for (const auto& kv : dataset_frames)
 			{
 				// Get frames
-				std::tuple<std::string, std::string, std::string> frame_paths = kv.second;
+				std::tuple<std::string, std::string, std::string, std::string> frame_paths = kv.second;
 				cv::Mat depth_frame = cv::imread(std::get<0>(frame_paths), CV_LOAD_IMAGE_GRAYSCALE);
 				cv::Mat infrared_frame = cv::imread(std::get<1>(frame_paths), CV_LOAD_IMAGE_GRAYSCALE);
+				cv::Mat low_infrared_frame = cv::imread(std::get<2>(frame_paths), CV_LOAD_IMAGE_GRAYSCALE);
 
-				this->apply_kinect_multisource_frame(kv.first, depth_frame, infrared_frame); // process
+				this->apply_kinect_multisource_frame(kv.first, depth_frame, infrared_frame, low_infrared_frame); // process
 				if (current_frame_idx >= topviewkinect::vision::REQUIRED_BACKGROUND_FRAMES)  // output real data
 				{
 					this->interaction_log.output_skeleton_features(this->kinect_frame_id, this->skeletons, keep_label);
@@ -731,8 +804,8 @@ namespace topviewkinect
 			this->interaction_log.output_description(dataset_name);
 		}
 
-		Detector detector("D:\\libs\\darknet-win\\darknet\\cfg\\yolo.cfg", "D:\\libs\\darknet-win\\darknet\\cfg\\yolo.weights");
-		auto obj_names = objects_names_from_file("D:\\libs\\darknet-win\\darknet\\data\\coco.names");
+		//Detector detector("D:\\libs\\darknet-win\\darknet\\cfg\\yolo.cfg", "D:\\libs\\darknet-win\\darknet\\cfg\\yolo.weights");
+		//auto obj_names = objects_names_from_file("D:\\libs\\darknet-win\\darknet\\data\\coco.names");
 
 		// Running
 		bool TopViewSpace::process_kinect_frames()
@@ -781,20 +854,20 @@ namespace topviewkinect
 				//std::chrono::time_point<std::chrono::high_resolution_clock> features_start = std::chrono::high_resolution_clock::now();
 				//long long features_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - features_start).count();
 
-				//this->detect_skeletons();
+				this->detect_skeletons();
 				//auto skeleton_duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start);
 				//std::cout << "detect skeleton time: " << skeleton_duration.count() << std::endl;
 
-				// YOLO v2
-				//cv::Mat m = cv::Mat::zeros(cv::Size(topviewkinect::kinect2::COLOR_WIDTH/2, topviewkinect::kinect2::COLOR_WIDTH / 2), CV_8UC3);
-				//cv::resize(this->rgb_frame, m, m.size());
-				std::vector<bbox_t> result_vec = detector.detect(this->rgb_frame);
-				auto yolo_duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start);
-				std::cout << "yolo time: " << yolo_duration.count() << std::endl;
-				result_vec = detector.tracking_id(result_vec);
-				cv::Mat yolo_result = this->rgb_frame.clone();
-				draw_boxes(yolo_result, result_vec, obj_names);
-				cv::imshow("YOLO", yolo_result);
+				//// YOLO v2
+				////cv::Mat m = cv::Mat::zeros(cv::Size(topviewkinect::kinect2::COLOR_WIDTH/2, topviewkinect::kinect2::COLOR_WIDTH / 2), CV_8UC3);
+				////cv::resize(this->rgb_frame, m, m.size());
+				//std::vector<bbox_t> result_vec = detector.detect(this->rgb_frame);
+				//auto yolo_duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start);
+				//std::cout << "yolo time: " << yolo_duration.count() << std::endl;
+				//result_vec = detector.tracking_id(result_vec);
+				//cv::Mat yolo_result = this->rgb_frame.clone();
+				//draw_boxes(yolo_result, result_vec, obj_names);
+				//cv::imshow("YOLO output", yolo_result);
 
 				//// OpenPose
 				//// Push
@@ -816,7 +889,7 @@ namespace topviewkinect
 				//	bool processed = op_wrapper.tryPop(datumProcessed);
 				//	if (processed)
 				//	{
-				//		cv::imshow("openpose output", datumProcessed->at(0).cvOutputData);
+				//		cv::imshow("OPENPOSE output", datumProcessed->at(0).cvOutputData);
 				//		
 				//		// Update OpenPose skeletons
 				//		this->op_skeletons.clear();
@@ -862,6 +935,10 @@ namespace topviewkinect
 				//		this->op_processing = false;
 				//	}
 				//}
+
+				// Android sensor data
+				std::cout << "frame id: " << this->kinect_frame_id << std::endl;
+				topviewkinect::util::log_println(this->android_sensor_data.to_str());
 
 				//this->combine_openpose_and_depth();
 
@@ -1098,10 +1175,190 @@ namespace topviewkinect
 			imshow(window_name, dst);
 		}
 
-		cv::Mat prev = cv::Mat::zeros(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE, CV_8UC1);
-		cv::Mat next;
-		cv::Mat flow;
-		cv::UMat uflow;
+		cv::Mat depth_prev = cv::Mat::zeros(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE, CV_8UC1);
+		cv::Mat infrared_prev = cv::Mat::zeros(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE, CV_8UC1);
+
+		inline bool isFlowCorrect(cv::Point2f u)
+		{
+			return !cvIsNaN(u.x) && !cvIsNaN(u.y) && fabs(u.x) < 1e9 && fabs(u.y) < 1e9;
+		}
+
+		static cv::Vec3b computeColor(float fx, float fy)
+		{
+			static bool first = true;
+
+			// relative lengths of color transitions:
+			// these are chosen based on perceptual similarity
+			// (e.g. one can distinguish more shades between red and yellow
+			//  than between yellow and green)
+			const int RY = 15;
+			const int YG = 6;
+			const int GC = 4;
+			const int CB = 11;
+			const int BM = 13;
+			const int MR = 6;
+			const int NCOLS = RY + YG + GC + CB + BM + MR;
+			static cv::Vec3i colorWheel[NCOLS];
+
+			if (first)
+			{
+				int k = 0;
+
+				for (int i = 0; i < RY; ++i, ++k)
+					colorWheel[k] = cv::Vec3i(255, 255 * i / RY, 0);
+
+				for (int i = 0; i < YG; ++i, ++k)
+					colorWheel[k] = cv::Vec3i(255 - 255 * i / YG, 255, 0);
+
+				for (int i = 0; i < GC; ++i, ++k)
+					colorWheel[k] = cv::Vec3i(0, 255, 255 * i / GC);
+
+				for (int i = 0; i < CB; ++i, ++k)
+					colorWheel[k] = cv::Vec3i(0, 255 - 255 * i / CB, 255);
+
+				for (int i = 0; i < BM; ++i, ++k)
+					colorWheel[k] = cv::Vec3i(255 * i / BM, 0, 255);
+
+				for (int i = 0; i < MR; ++i, ++k)
+					colorWheel[k] = cv::Vec3i(255, 0, 255 - 255 * i / MR);
+
+				first = false;
+			}
+
+			const float rad = sqrt(fx * fx + fy * fy);
+			const float a = atan2(-fy, -fx) / (float)CV_PI;
+
+			const float fk = (a + 1.0f) / 2.0f * (NCOLS - 1);
+			const int k0 = static_cast<int>(fk);
+			const int k1 = (k0 + 1) % NCOLS;
+			const float f = fk - k0;
+
+			cv::Vec3b pix;
+
+			for (int b = 0; b < 3; b++)
+			{
+				const float col0 = colorWheel[k0][b] / 255.0f;
+				const float col1 = colorWheel[k1][b] / 255.0f;
+
+				float col = (1 - f) * col0 + f * col1;
+
+				if (rad <= 1)
+					col = 1 - rad * (1 - col); // increase saturation with radius
+				else
+					col *= .75; // out of range
+
+				pix[2 - b] = static_cast<uchar>(255.0 * col);
+			}
+
+			return pix;
+		}
+
+		static void drawOpticalFlow(const cv::Mat_<float>& flowx, const  cv::Mat_<float>& flowy, cv::Mat& dst, float maxmotion = -1)
+		{
+			dst.create(flowx.size(), CV_8UC3);
+			dst.setTo(cv::Scalar::all(0));
+
+			// determine motion range:
+			float maxrad = maxmotion;
+
+			if (maxmotion <= 0)
+			{
+				maxrad = 1;
+				for (int y = 0; y < flowx.rows; ++y)
+				{
+					for (int x = 0; x < flowx.cols; ++x)
+					{
+						cv::Point2f u(flowx(y, x), flowy(y, x));
+
+						if (!isFlowCorrect(u))
+							continue;
+
+						maxrad = cv::max(maxrad, cv::sqrt(u.x * u.x + u.y * u.y));
+					}
+				}
+			}
+
+			for (int y = 0; y < flowx.rows; ++y)
+			{
+				for (int x = 0; x < flowx.cols; ++x)
+				{
+					cv::Point2f u(flowx(y, x), flowy(y, x));
+
+					if (isFlowCorrect(u))
+						dst.at< cv::Vec3b>(y, x) = computeColor(u.x / maxrad, u.y / maxrad);
+				}
+			}
+		}
+
+		static void drawOpticalFlow_2(const cv::Mat_<float>& flowx, const  cv::Mat_<float>& flowy, cv::Mat& dst, float maxmotion = -1)
+		{
+			for (int y = 0; y < flowx.rows; y += 8)
+			{
+				for (int x = 0; x < flowx.cols; x += 8)
+				{
+					cv::Point2f u(flowx(y, x), flowy(y, x));
+					if (cv::sqrt(u.x * u.x + u.y * u.y) < 0.5)
+					{
+						continue;
+					}
+					cv::arrowedLine(dst, cv::Point(x, y), cv::Point(cvRound(x + u.x), cvRound(y + u.y)), topviewkinect::color::CV_BGR_RED, 1);
+					cv::circle(dst, cv::Point(x, y), 1, topviewkinect::color::CV_BGR_RED, -1);
+				}
+			}
+		}
+
+		static void showFlow(const char* name, const cv::cuda::GpuMat& d_flow)
+		{
+			cv::cuda::GpuMat planes[2];
+			cv::cuda::split(d_flow, planes);
+
+			cv::Mat flowx(planes[0]);
+			cv::Mat flowy(planes[1]);
+
+			cv::Mat out;
+			drawOpticalFlow(flowx, flowy, out, 10);
+
+			cv::imshow(name, out);
+		}
+
+		cv::Mat TopViewSpace::compute_optical_flow(const cv::Mat& src_prev, const cv::Mat& src_next, cv::Mat& viz, const char* name)
+		{
+			cv::cuda::GpuMat d_frame0(src_prev);
+			cv::cuda::GpuMat d_frame1(src_next);
+			cv::cuda::GpuMat d_flow(src_prev.size(), CV_32FC2);
+
+			cv::cuda::GpuMat d_frame0f;
+			cv::cuda::GpuMat d_frame1f;
+			d_frame0.convertTo(d_frame0f, CV_32F, 1.0 / 255.0);
+			d_frame1.convertTo(d_frame1f, CV_32F, 1.0 / 255.0);
+
+			const int64 start = cv::getTickCount();
+			this->brox_optflow->calc(d_frame0f, d_frame1f, d_flow);
+
+			const double timeSec = (cv::getTickCount() - start) / cv::getTickFrequency();
+			cout << "Brox : " << timeSec << " sec" << endl;
+
+			showFlow(name, d_flow);
+
+			cv::cuda::GpuMat planes[2];
+			cv::cuda::split(d_flow, planes);
+			cv::Mat flowx(planes[0]);
+			cv::Mat flowy(planes[1]);
+			drawOpticalFlow_2(flowx, flowy, viz, 10);
+
+			//// optical flow visualization
+			//for (int y = 0; y < viz.rows; y += 16)
+			//{
+			//	for (int x = 0; x < viz.cols; x += 16)
+			//	{
+			//		const cv::Point2f& fxy = flow.at<cv::Point2f>(y, x);
+			//		cv::line(viz, cv::Point(x, y), cv::Point(cvRound(x + fxy.x), cvRound(y + fxy.y)), 255, 1);
+			//		cv::circle(viz, cv::Point(x, y), 2, 255, -1);
+			//	}
+			//}
+
+			return viz;
+		}
 
 		void TopViewSpace::detect_skeletons()
 		{
@@ -1122,115 +1379,127 @@ namespace topviewkinect
 			cv::threshold(depth_laplacian_filter, depth_contours_mask, 0, 255, CV_THRESH_BINARY | CV_THRESH_OTSU);
 			cv::imshow("Laplacian filter BINARY", depth_contours_mask);
 
-			cv::Mat vertical_k = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(1, 1));
-			cv::erode(depth_contours_mask, depth_contours_mask, vertical_k, cv::Point(-1, -1));
-			cv::dilate(depth_contours_mask, depth_contours_mask, vertical_k, cv::Point(-1, -1));
-			cv::imshow("Laplacian filter VERTICAL KERNEL", depth_contours_mask);
+			// Vertical kernel
+			//cv::Mat vertical_k = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(1, 1));
+			//cv::erode(depth_contours_mask, depth_contours_mask, vertical_k, cv::Point(-1, -1));
+			//cv::dilate(depth_contours_mask, depth_contours_mask, vertical_k, cv::Point(-1, -1));
+			//cv::imshow("Laplacian filter VERTICAL KERNEL", depth_contours_mask);
 
-			//cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
-			//cv::morphologyEx(depth_contours, depth_contours_closed, cv::MORPH_CLOSE, gradient_kernel);
-			//cv::imshow("depth_contours close", depth_contours_closed);
-			//cv::morphologyEx(depth_laplacian_filter, depth_laplacian_filter, cv::MORPH_GRADIENT, kernel, cv::Point(-1, -1), 1);
-			//cv::morphologyEx(depth_laplacian_filter, depth_laplacian_filter, cv::MORPH_CLOSE, kernel, cv::Point(-1, -1), 3);
-			//cv::imshow("depth_laplacian_filter bold", depth_laplacian_filter);
+			////cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
+			////cv::morphologyEx(depth_contours, depth_contours_closed, cv::MORPH_CLOSE, gradient_kernel);
+			////cv::imshow("depth_contours close", depth_contours_closed);
+			////cv::morphologyEx(depth_laplacian_filter, depth_laplacian_filter, cv::MORPH_GRADIENT, kernel, cv::Point(-1, -1), 1);
+			////cv::morphologyEx(depth_laplacian_filter, depth_laplacian_filter, cv::MORPH_CLOSE, kernel, cv::Point(-1, -1), 3);
+			////cv::imshow("depth_laplacian_filter bold", depth_laplacian_filter);
 
-			cv::Mat test = depth_contours_mask.clone();
-			std::vector<std::vector<cv::Point>> c;
-			std::vector<cv::Vec4i> h;
-			cv::findContours(depth_contours_mask.clone(), c, h, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-			for (int i = 0; i < c.size(); ++i)
-			{
-				if (cv::contourArea(c[i], false) >= 500)
-				{
-					if (h[i][3] != -1)
-					{
-						cv::drawContours(depth_contours_mask, c, i, 255, 1);
-					}
-					//if (h[i][3] != -1)
-					//{
-					//	cv::drawContours(test, c, i, topviewkinect::color::CV_BLACK, -1);
-					//}
-
-					// has child continue
-					//if (depth_skeletons_hierarrchy[i][2] != -1)
-					//{
-					//	std::cout << "has child" << std::endl;
-					//	continue;
-					//}
-					//cv::drawContours(depth_skeletons, depth_skeletons_contours, i, topviewkinect::color::CV_WHITE, 2);
-				}
-			}
-			cv::imshow("test", depth_contours_mask);
-
-			//// optical flow
-			//if (cv::countNonZero(prev) == 0)
+			//cv::Mat test = depth_contours_mask.clone();
+			//std::vector<std::vector<cv::Point>> c;
+			//std::vector<cv::Vec4i> h;
+			//cv::findContours(depth_contours_mask.clone(), c, h, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+			//for (int i = 0; i < c.size(); ++i)
 			//{
-			//	depth_laplaced.copyTo(prev);
-			//}
-			//else
-			//{
-			//	cv::Mat optical = this->depth_foreground_frame.clone();
-			//	depth_laplaced.copyTo(next);
-			//	cv::calcOpticalFlowFarneback(prev, next, uflow, 0.5, 3, 15, 3, 5, 1.2, 0);
-
-			//	uflow.copyTo(flow);
-			//	for (int y = 0; y < optical.rows; y += 32)
+			//	if (cv::contourArea(c[i], false) >= 500)
 			//	{
-			//		for (int x = 0; x < optical.cols; x += 32)
+			//		if (h[i][3] != -1)
 			//		{
-			//			const cv::Point2f& fxy = flow.at<cv::Point2f>(y, x);
-			//			cv::line(optical, cv::Point(x, y), cv::Point(cvRound(x + fxy.x), cvRound(y + fxy.y)), 255, 3);
-			//			cv::circle(optical, cv::Point(x, y), 2, 255, -1);
+			//			cv::drawContours(depth_contours_mask, c, i, 255, 1);
 			//		}
+			//		//if (h[i][3] != -1)
+			//		//{
+			//		//	cv::drawContours(test, c, i, topviewkinect::color::CV_BLACK, -1);
+			//		//}
+
+			//		// has child continue
+			//		//if (depth_skeletons_hierarrchy[i][2] != -1)
+			//		//{
+			//		//	std::cout << "has child" << std::endl;
+			//		//	continue;
+			//		//}
+			//		//cv::drawContours(depth_skeletons, depth_skeletons_contours, i, topviewkinect::color::CV_WHITE, 2);
 			//	}
-			//	cv::imshow("optical", optical);
-
-			//	cv::Mat flow_split[2];
-			//	cv::Mat magnitude, angle;
-			//	cv::split(flow, flow_split);
-			//	cv::cartToPolar(flow_split[0], flow_split[1], magnitude, angle, true);
-
-			//	int rows = flow.rows;
-			//	int cols = flow.cols;
-			//	CFloatImage cFlow(cols, rows, 2);
-			//	// Convert flow to CFLoatImage:
-			//	for (int i = 0; i < rows; i++) {
-			//		for (int j = 0; j < cols; j++) {
-			//			cFlow.Pixel(j, i, 0) = flow.at<cv::Vec2f>(i, j)[0];
-			//			cFlow.Pixel(j, i, 1) = flow.at<cv::Vec2f>(i, j)[1];
-			//		}
-			//	}
-			//	CByteImage cImage;
-			//	double mag_max;
-			//	cv::minMaxLoc(magnitude, 0, &mag_max);
-			//	MotionToColor(cFlow, cImage, mag_max);
-			//	cv::Mat image(rows, cols, CV_8UC3, cv::Scalar(0, 0, 0));
-			//	// Compute back to cv::Mat with 3 channels in BGR:
-			//	for (int i = 0; i < rows; i++) {
-			//		for (int j = 0; j < cols; j++) {
-			//			image.at<cv::Vec3b>(i, j)[0] = cImage.Pixel(j, i, 0);
-			//			image.at<cv::Vec3b>(i, j)[1] = cImage.Pixel(j, i, 1);
-			//			image.at<cv::Vec3b>(i, j)[2] = cImage.Pixel(j, i, 2);
-			//		}
-			//	}
-			//	cv::imshow("optical color", image);
-
-			//	//cv::Mat flow_split[2];
-			//	//cv::Mat hsv_split[3], hsv, bgr;
-			//	//cv::Mat magnitude, angle;
-			//	//cv::split(flow, flow_split);
-			//	//cv::cartToPolar(flow_split[0], flow_split[1], magnitude, angle, true);
-			//	//cv::normalize(magnitude, magnitude, 0, 1, cv::NORM_MINMAX);
-			//	//hsv_split[0] = angle; // already in degrees - no normalization needed
-			//	//hsv_split[1] = 255;
-			//	//hsv_split[2] = cv::Mat::ones(angle.size(), angle.type());
-			//	//cv::merge(hsv_split, 3, hsv);
-			//	//cv::cvtColor(hsv, bgr, cv::COLOR_HSV2BGR);
-			//	//cv::imshow("optical color", bgr);
-
-			//	//cv::cartToPolar(res.u, res.t, )
-			//	depth_laplaced.copyTo(prev);
 			//}
+			//cv::imshow("test", depth_contours_mask);
+
+			// Dense optical flow
+			if (cv::countNonZero(depth_prev) == 0 || cv::countNonZero(infrared_prev) == 0)
+			{
+				depth_laplaced.copyTo(depth_prev);
+				this->infrared_frame.copyTo(infrared_prev);
+			}
+			else
+			{
+				//cv::Mat optical = this->depth_foreground_frame.clone();
+				//depth_laplaced.copyTo(next);
+				//cv::calcOpticalFlowFarneback(depth_prev, next, uflow, 0.5, 3, 15, 3, 5, 1.2, 0);
+
+				//uflow.copyTo(flow);
+				//for (int y = 0; y < optical.rows; y += 32)
+				//{
+				//	for (int x = 0; x < optical.cols; x += 32)
+				//	{
+				//		const cv::Point2f& fxy = flow.at<cv::Point2f>(y, x);
+				//		cv::line(optical, cv::Point(x, y), cv::Point(cvRound(x + fxy.x), cvRound(y + fxy.y)), 255, 3);
+				//		cv::circle(optical, cv::Point(x, y), 2, 255, -1);
+				//	}
+				//}
+
+				//cv::Mat depth_optical_viz = this->depth_foreground_frame.clone();
+				//compute_optical_flow(depth_prev, depth_laplaced, depth_optical_viz, "Brox Optical Flow - Depth");
+				//cv::imshow("dense optical depth", depth_optical_viz);
+
+				cv::Mat infrared_optical_viz;
+				cv::cvtColor(this->infrared_frame, infrared_optical_viz, CV_GRAY2BGR);
+
+				compute_optical_flow(infrared_prev, this->infrared_frame.clone(), infrared_optical_viz, "Brox Optical Flow - Infrared");
+				cv::imshow("dense optical infrared", infrared_optical_viz);
+
+				//cv::Mat flow_split[2];
+				//cv::Mat magnitude, angle;
+				//cv::split(flow, flow_split);
+				//cv::cartToPolar(flow_split[0], flow_split[1], magnitude, angle, true);
+
+				//int rows = flow.rows;
+				//int cols = flow.cols;
+				//CFloatImage cFlow(cols, rows, 2);
+				//// Convert flow to CFLoatImage:
+				//for (int i = 0; i < rows; i++) {
+				//	for (int j = 0; j < cols; j++) {
+				//		cFlow.Pixel(j, i, 0) = flow.at<cv::Vec2f>(i, j)[0];
+				//		cFlow.Pixel(j, i, 1) = flow.at<cv::Vec2f>(i, j)[1];
+				//	}
+				//}
+				//CByteImage cImage;
+				//double mag_max;
+				//cv::minMaxLoc(magnitude, 0, &mag_max);
+				//MotionToColor(cFlow, cImage, mag_max);
+				//cv::Mat image(rows, cols, CV_8UC3, cv::Scalar(0, 0, 0));
+				//// Compute back to cv::Mat with 3 channels in BGR:
+				//for (int i = 0; i < rows; i++) {
+				//	for (int j = 0; j < cols; j++) {
+				//		image.at<cv::Vec3b>(i, j)[0] = cImage.Pixel(j, i, 0);
+				//		image.at<cv::Vec3b>(i, j)[1] = cImage.Pixel(j, i, 1);
+				//		image.at<cv::Vec3b>(i, j)[2] = cImage.Pixel(j, i, 2);
+				//	}
+				//}
+				//cv::imshow("optical color", image);
+
+				//cv::Mat flow_split[2];
+				//cv::Mat hsv_split[3], hsv, bgr;
+				//cv::Mat magnitude, angle;
+				//cv::split(flow, flow_split);
+				//cv::cartToPolar(flow_split[0], flow_split[1], magnitude, angle, true);
+				//cv::normalize(magnitude, magnitude, 0, 1, cv::NORM_MINMAX);
+				//hsv_split[0] = angle; // already in degrees - no normalization needed
+				//hsv_split[1] = 255;
+				//hsv_split[2] = cv::Mat::ones(angle.size(), angle.type());
+				//cv::merge(hsv_split, 3, hsv);
+				//cv::cvtColor(hsv, bgr, cv::COLOR_HSV2BGR);
+				//cv::imshow("optical color", bgr);
+
+				//cv::cartToPolar(res.u, res.t, )
+				depth_laplaced.copyTo(depth_prev);
+				this->infrared_frame.copyTo(infrared_prev);
+			}
 
 			//cv::Mat depth_contours_closed;
 			//cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
@@ -2250,6 +2519,11 @@ namespace topviewkinect
 
 		cv::Mat TopViewSpace::get_infrared_frame() const
 		{
+			return this->infrared_frame.clone();
+		}
+
+		cv::Mat TopViewSpace::get_low_infrared_frame() const
+		{
 			return this->low_infrared_frame.clone();
 		}
 
@@ -2261,6 +2535,11 @@ namespace topviewkinect
 		cv::Mat TopViewSpace::get_visualization_frame() const
 		{
 			return this->visualization_frame.clone();
+		}
+
+		cv::Mat TopViewSpace::get_android_sensor_frame() const
+		{
+			return this->android_sensor_frame.clone();
 		}
 	}
 }

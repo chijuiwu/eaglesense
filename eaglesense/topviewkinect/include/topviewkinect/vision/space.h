@@ -15,6 +15,8 @@ You should have received a copy of the GNU General Public License along with thi
 
 #include <opencv2/core.hpp>
 #include <opencv2/video.hpp>
+#include <opencv2/cudaoptflow.hpp>
+#include <opencv2/cudaarithm.hpp>
 
 #include <Kinect.h>
 
@@ -49,7 +51,14 @@ namespace topviewkinect
             signed long long kinect_depth_frame_timestamp;
             signed long long kinect_infrared_frame_timestamp;
             signed long long kinect_rgb_frame_timestamp;
-            void apply_kinect_multisource_frame(const int frame_id, const cv::Mat& depth_frame, const cv::Mat& infrared_frame = cv::Mat(), const cv::Mat& rgb_frame = cv::Mat());
+            void apply_kinect_multisource_frame(const int frame_id, const cv::Mat& depth_frame, const cv::Mat& infrared_frame, const cv::Mat& low_infrared_frame = cv::Mat(), const cv::Mat& rgb_frame = cv::Mat());
+
+			// Android sensors
+			void apply_android_sensor_data();
+
+			// Optical Flow
+			cv::Ptr<cv::cuda::BroxOpticalFlow> brox_optflow;
+			cv::Mat compute_optical_flow(const cv::Mat& src_prev, const cv::Mat& src_next, cv::Mat& viz, const char* name);
 
 			// OpenPose wrapper
 			op::Wrapper<std::vector<thirdparty::openpose::UserDatum>> op_wrapper{ op::ThreadManagerMode::Asynchronous };
@@ -62,7 +71,7 @@ namespace topviewkinect
             cv::Ptr<cv::BackgroundSubtractor> p_background_extractor;
             int empty_background_counter;
 
-            // Visualizations
+            // Data and Visualizations
             topviewkinect::vision::FrameRateController framerate_controller;
             cv::Mat depth_frame;
             cv::Mat depth_foreground_frame;
@@ -70,6 +79,8 @@ namespace topviewkinect
             cv::Mat low_infrared_frame;
             cv::Mat rgb_frame;
             cv::Mat visualization_frame;
+			cv::Mat android_sensor_frame;
+			topviewkinect::AndroidSensorData android_sensor_data;
 
             // Skeletons
             std::vector<topviewkinect::skeleton::Skeleton> skeletons;
@@ -102,6 +113,7 @@ namespace topviewkinect
 
             // Tracking
             bool refresh_kinect_frames();
+			bool refresh_android_sensor_data(const std::deque<topviewkinect::AndroidSensorData>& data);
             bool process_kinect_frames();
             const int get_kinect_frame_id() const;
             const bool is_calibration_ready() const;
@@ -117,7 +129,7 @@ namespace topviewkinect
             // Capture
             bool create_dataset(const int dataset_id);
             bool save_kinect_frames();
-			bool save_android_sensor_data(topviewkinect::AndroidSensorData data);
+			bool save_android_sensor_data(const topviewkinect::AndroidSensorData& data);
             bool save_visualization();
 
             // Postprocess
@@ -125,9 +137,11 @@ namespace topviewkinect
 
             // Visualizations
             cv::Mat get_depth_frame() const;
-            cv::Mat get_infrared_frame() const;
+			cv::Mat get_infrared_frame() const;
+            cv::Mat get_low_infrared_frame() const;
             cv::Mat get_rgb_frame() const;
             cv::Mat get_visualization_frame() const;
+			cv::Mat get_android_sensor_frame() const;
         };
     }
 }

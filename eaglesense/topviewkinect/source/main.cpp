@@ -25,6 +25,7 @@ You should have received a copy of the GNU General Public License along with thi
 #include <string>
 #include <sstream>
 #include <vector>
+#include <deque>
 #include <winsock2.h>
 #include <Ws2tcpip.h>
 #include <stdio.h>
@@ -43,15 +44,16 @@ static constexpr const char* INFRARED_WINDOW_NAME = "Top-View Kinect Infrared";
 static constexpr const char* RGB_WINDOW_NAME = "Top-View Kinect RGB";
 static constexpr const char* SPACE_WINDOW_NAME = "Top-View Interactive Space";
 static constexpr const char* SPACE_ENLARGED_WINDOW_NAME = "Top-View Interactive Space (Zoom-in)";
+static constexpr const char* ANDROID_SENSOR_WINDOW_NAME = "Android Sensor Stream";
 
 static int start();
 static int replay(const int dataset_id);
 static int capture(const int dataset_id);
 static int postprocess(const int dataset_id, const std::string& dataset_name, const bool keep_label);
 
-class HelloWorldServer {
+class AndroidSensorServer {
 	public:
-		HelloWorldServer(boost::asio::io_service& io_service)
+		AndroidSensorServer(boost::asio::io_service& io_service)
 			: _socket(io_service, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), 8888))
 		{
 			try_receive();
@@ -62,18 +64,24 @@ class HelloWorldServer {
 		float orientation_x, orientation_y, orientation_z;
 		float linear_accel_x, linear_accel_y, linear_accel_z;
 		float rotation_vec_x, rotation_vec_y, rotation_vec_z;
+		topviewkinect::AndroidSensorData sensor_data_current;
+		std::deque<topviewkinect::AndroidSensorData> sensor_data_history;
 
-		topviewkinect::AndroidSensorData get_android_sensor_data()
+		const topviewkinect::AndroidSensorData get_sensor_data() const
 		{
-			topviewkinect::AndroidSensorData data = { accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z, orientation_x, orientation_y, orientation_z, linear_accel_x, linear_accel_y, linear_accel_z, rotation_vec_x, rotation_vec_y, rotation_vec_z };
-			return data;
+			return sensor_data_current;
+		}
+
+		const std::deque<topviewkinect::AndroidSensorData> get_sensor_data_history() const
+		{
+			return this->sensor_data_history;
 		}
 
 	private:
 		void try_receive() {
 			_socket.async_receive_from(
 				boost::asio::buffer(_data, buffer_size-1), _sender_endpoint,
-				boost::bind(&HelloWorldServer::handle_receive, this,
+				boost::bind(&AndroidSensorServer::handle_receive, this,
 					boost::asio::placeholders::error,
 					boost::asio::placeholders::bytes_transferred));
 		}
@@ -98,13 +106,15 @@ class HelloWorldServer {
 				orientation_x = sensor_data_delimited[14], orientation_y = sensor_data_delimited[15], orientation_z = sensor_data_delimited[16];
 				linear_accel_x = sensor_data_delimited[18], linear_accel_y = sensor_data_delimited[19], linear_accel_z = sensor_data_delimited[20];
 				rotation_vec_x = sensor_data_delimited[22], rotation_vec_y = sensor_data_delimited[23], rotation_vec_z = sensor_data_delimited[24];
+				sensor_data_current = { accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z, orientation_x, orientation_y, orientation_z, linear_accel_x, linear_accel_y, linear_accel_z, rotation_vec_x, rotation_vec_y, rotation_vec_z };
 
-				topviewkinect::util::log_println(sensor_data_str);
-				//std::cout << "accl: " << accl_x << " , " << accl_y << " , " << accl_z << std::endl;
-				//std::cout << "gyro: " << gyro_x << " , " << gyro_y << " , " << gyro_z << std::endl;
-				//std::cout << "oren: " << oren_x << " , " << oren_y << " , " << oren_z << std::endl;
-				//std::cout << "lina: " << lina_x << " , " << lina_y << " , " << lina_z << std::endl;
-				//std::cout << "rotv: " << rotv_x << " , " << rotv_y << " , " << rotv_z << std::endl;
+				this->sensor_data_history.push_back(sensor_data_current);
+				if (this->sensor_data_history.size() > 300)
+				{
+					this->sensor_data_history.pop_front();
+				}
+
+				topviewkinect::util::log_println(sensor_data_current.to_str());
 
 				try_receive();
 			}
@@ -183,6 +193,9 @@ int main(int argc, char* argv[])
         return EXIT_SUCCESS;
     }
 
+	// OpenCv
+	std::cout << cv::getBuildInformation() << std::endl;
+
     if (argc == 1)
     {
         return start();
@@ -222,7 +235,7 @@ static int start()
 	topviewkinect::util::log_println("Start server ...");
 
 	boost::asio::io_service io_service;
-	HelloWorldServer server{ io_service };
+	AndroidSensorServer server{ io_service };
 	std::thread thread1([&io_service]() { io_service.run(); });
 
     topviewkinect::util::log_println("Tracking ...");
@@ -240,6 +253,7 @@ static int start()
 	cv::namedWindow(DEPTH_WINDOW_NAME);
 	cv::namedWindow(INFRARED_WINDOW_NAME);
 	cv::namedWindow(SPACE_WINDOW_NAME);
+	cv::namedWindow(ANDROID_SENSOR_WINDOW_NAME);
 	const cv::Size enlarged_size = cv::Size(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE.width * 2, topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE.height * 2);
 	cv::Mat visualization_frame_enlarged = cv::Mat::zeros(enlarged_size, CV_8UC3);
 
@@ -249,11 +263,13 @@ static int start()
 		cv::Mat depth_frame = m_space.get_depth_frame();
 		cv::Mat infrared_frame = m_space.get_infrared_frame();
 		cv::Mat visualization_frame = m_space.get_visualization_frame();
+		cv::Mat android_sensor_frame = m_space.get_android_sensor_frame();
 		cv::resize(visualization_frame, visualization_frame_enlarged, visualization_frame_enlarged.size(), 0, 0, cv::INTER_LINEAR);
 
         cv::imshow(DEPTH_WINDOW_NAME, depth_frame);
         cv::imshow(INFRARED_WINDOW_NAME, infrared_frame);
         cv::imshow(SPACE_WINDOW_NAME, visualization_frame_enlarged);
+		cv::imshow(ANDROID_SENSOR_WINDOW_NAME, android_sensor_frame);
 
         int ascii_keypress = cv::waitKey(1); // any key to exit
         if (ascii_keypress != -1)
@@ -262,10 +278,12 @@ static int start()
             break;
         }
 
+		m_space.refresh_android_sensor_data(server.get_sensor_data_history());
+
         bool frame_received = m_space.refresh_kinect_frames();
         if (frame_received)
-        {
-            m_space.process_kinect_frames();
+		{
+            //m_space.process_kinect_frames();
         }
     }
 
@@ -351,7 +369,7 @@ static int capture(const int dataset_id)
 	topviewkinect::util::log_println("Start server ...");
 
 	boost::asio::io_service io_service;
-	HelloWorldServer server{ io_service };
+	AndroidSensorServer server{ io_service };
 	std::thread thread1([&io_service]() { io_service.run(); });
 
     topviewkinect::util::log_println("Capturing ...");
@@ -377,7 +395,7 @@ static int capture(const int dataset_id)
     while (true)
     {
         cv::imshow(DEPTH_WINDOW_NAME, m_space.get_depth_frame());
-        cv::imshow(INFRARED_WINDOW_NAME, m_space.get_infrared_frame());
+        cv::imshow(INFRARED_WINDOW_NAME, m_space.get_low_infrared_frame());
         cv::imshow(SPACE_WINDOW_NAME, m_space.get_rgb_frame());
 
         int ascii_keypress = cv::waitKey(30); // 30 fps
@@ -390,8 +408,8 @@ static int capture(const int dataset_id)
         bool frame_received = m_space.refresh_kinect_frames();
         if (frame_received)
         {
+			m_space.save_android_sensor_data(server.get_sensor_data());
             m_space.save_kinect_frames();
-			m_space.save_android_sensor_data(server.get_android_sensor_data());
         }
     }
 
