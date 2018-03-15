@@ -14,9 +14,13 @@ You should have received a copy of the GNU General Public License along with thi
 #pragma once
 
 #include <opencv2/core.hpp>
+#include <opencv2/highgui.hpp>
 #include <opencv2/video.hpp>
+#include <opencv2/cvconfig.h>
+#include <opencv2/core/cuda.hpp>
 #include <opencv2/cudaoptflow.hpp>
 #include <opencv2/cudaarithm.hpp>
+#include "opencv2/cudalegacy.hpp"
 
 #include <Kinect.h>
 
@@ -32,6 +36,9 @@ You should have received a copy of the GNU General Public License along with thi
 #include "topviewkinect/vision/classifier.h"
 #include "topviewkinect/vision/framerate.h"
 #include "topviewkinect/vision/log.h"
+
+//void onMouse(int event, int x, int y);
+//static void onMouse(int event, int x, int y, int, void* userdata);
 
 namespace topviewkinect
 {
@@ -51,13 +58,23 @@ namespace topviewkinect
             signed long long kinect_depth_frame_timestamp;
             signed long long kinect_infrared_frame_timestamp;
             signed long long kinect_rgb_frame_timestamp;
-            void apply_kinect_multisource_frame(const int frame_id, const cv::Mat& depth_frame, const cv::Mat& infrared_frame, const cv::Mat& low_infrared_frame = cv::Mat(), const cv::Mat& rgb_frame = cv::Mat());
+            void apply_kinect_multisource_frame(const int frame_id, const cv::Mat& depth_frame, const cv::Mat& infrared_frame, const cv::Mat& infrared_low_frame = cv::Mat(), const cv::Mat& rgb_frame = cv::Mat());
+
+			// Calibration
+			cv::Mat crossmotion_calibration_frame;
+			std::vector<cv::Point> crossmotion_calibration_points_to_add;
+			std::vector<cv::Point> crossmotion_calibration_points_2d;
+			std::vector<CameraSpacePoint> crossmotion_calibration_points_3d;
+			//CameraSpacePoint* color_to_camera_space_points;
+			//void calibration_on_mouse(int event, int x, int y, int, void* user_data);
 
 			// Android sensors
 			void apply_android_sensor_data();
 
 			// Optical Flow
 			cv::Ptr<cv::cuda::BroxOpticalFlow> brox_optflow;
+			cv::Ptr<cv::cuda::FarnebackOpticalFlow> farn_optflow;
+			cv::Ptr<cv::cuda::OpticalFlowDual_TVL1> tvl1_optflow;
 			cv::Mat compute_optical_flow(const cv::Mat& src_prev, const cv::Mat& src_next, cv::Mat& viz, const char* name);
 
 			// OpenPose wrapper
@@ -76,11 +93,16 @@ namespace topviewkinect
             cv::Mat depth_frame;
             cv::Mat depth_foreground_frame;
             cv::Mat infrared_frame;
-            cv::Mat low_infrared_frame;
+            cv::Mat infrared_low_frame;
             cv::Mat rgb_frame;
             cv::Mat visualization_frame;
 			cv::Mat android_sensor_frame;
-			topviewkinect::AndroidSensorData android_sensor_data;
+
+			// Sensor data
+			std::mutex android_sensor_mutex;
+			std::deque<topviewkinect::AndroidSensorData> android_sensor_data;
+			std::deque<topviewkinect::AndroidSensorData> android_sensor_data_tmp;
+			int android_sensor_label = 0;
 
             // Skeletons
             std::vector<topviewkinect::skeleton::Skeleton> skeletons;
@@ -91,7 +113,7 @@ namespace topviewkinect
             web::http::client::http_client* restful_client;
 
             bool inside_acitivty_tracking_zone(const cv::Mat& skeleton_depth_frame, int offset_x, int offset_y) const;
-            void detect_skeletons();
+			int detect_skeletons();
 			void combine_openpose_and_depth();
             void compute_skeleton_features();
 
@@ -109,17 +131,26 @@ namespace topviewkinect
             TopViewSpace();
             ~TopViewSpace();
 
+			ICoordinateMapper* kinect_coordinate_mapper;
+
             bool initialize();
 
             // Tracking
             bool refresh_kinect_frames();
-			bool refresh_android_sensor_data(const std::deque<topviewkinect::AndroidSensorData>& data);
             bool process_kinect_frames();
             const int get_kinect_frame_id() const;
             const bool is_calibration_ready() const;
             const size_t num_people() const;
             const std::vector<topviewkinect::skeleton::Skeleton> get_skeletons() const;
             const std::string skeletons_json() const;
+
+			// Sensor Fusion
+			bool refresh_android_sensor_data(topviewkinect::AndroidSensorData& data);
+			bool refresh_android_sensor_frame();
+			bool process_android_sensor_data();
+			void set_android_sensor_label(const std::string& label);
+			bool calibrate_sensor_fusion(const cv::Point& new_point);
+			bool offline_calibration();
 
             // Replay
             bool load_dataset(const int dataset_id);
@@ -129,8 +160,9 @@ namespace topviewkinect
             // Capture
             bool create_dataset(const int dataset_id);
             bool save_kinect_frames();
-			bool save_android_sensor_data(const topviewkinect::AndroidSensorData& data);
+			bool save_android_sensor_data();
             bool save_visualization();
+			bool save_calibration();
 
             // Postprocess
             void postprocess(const std::string& dataset_name, const bool keep_label);
@@ -142,6 +174,7 @@ namespace topviewkinect
             cv::Mat get_rgb_frame() const;
             cv::Mat get_visualization_frame() const;
 			cv::Mat get_android_sensor_frame() const;
+			cv::Mat get_crossmotion_calibration_frame() const;
         };
     }
 }

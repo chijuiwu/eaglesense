@@ -46,6 +46,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Header Files\thirdparty\liu_optflow">
+      <UniqueIdentifier>{1bcb2b72-8a21-42fb-ab0d-7193e23c72d5}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\stdafx.h">
@@ -120,6 +123,36 @@
     <ClInclude Include="include\thirdparty\mpi\RefCntMem.h">
       <Filter>Header Files\thirdparty\mpi</Filter>
     </ClInclude>
+    <ClInclude Include="include\thirdparty\liu_optflow\GaussianPyramid.h">
+      <Filter>Header Files\thirdparty\liu_optflow</Filter>
+    </ClInclude>
+    <ClInclude Include="include\thirdparty\liu_optflow\Image.h">
+      <Filter>Header Files\thirdparty\liu_optflow</Filter>
+    </ClInclude>
+    <ClInclude Include="include\thirdparty\liu_optflow\ImageIO.h">
+      <Filter>Header Files\thirdparty\liu_optflow</Filter>
+    </ClInclude>
+    <ClInclude Include="include\thirdparty\liu_optflow\ImageProcessing.h">
+      <Filter>Header Files\thirdparty\liu_optflow</Filter>
+    </ClInclude>
+    <ClInclude Include="include\thirdparty\liu_optflow\Matrix.h">
+      <Filter>Header Files\thirdparty\liu_optflow</Filter>
+    </ClInclude>
+    <ClInclude Include="include\thirdparty\liu_optflow\NoiseModel.h">
+      <Filter>Header Files\thirdparty\liu_optflow</Filter>
+    </ClInclude>
+    <ClInclude Include="include\thirdparty\liu_optflow\OpticalFlow.h">
+      <Filter>Header Files\thirdparty\liu_optflow</Filter>
+    </ClInclude>
+    <ClInclude Include="include\thirdparty\liu_optflow\project.h">
+      <Filter>Header Files\thirdparty\liu_optflow</Filter>
+    </ClInclude>
+    <ClInclude Include="include\thirdparty\liu_optflow\Stochastic.h">
+      <Filter>Header Files\thirdparty\liu_optflow</Filter>
+    </ClInclude>
+    <ClInclude Include="include\thirdparty\liu_optflow\Vector.h">
+      <Filter>Header Files\thirdparty\liu_optflow</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="source\stdafx.cpp">
@@ -178,6 +211,18 @@
     </ClCompile>
     <ClCompile Include="source\main.cpp">
       <Filter>Source Files\topviewkinect\vision</Filter>
+    </ClCompile>
+    <ClCompile Include="include\thirdparty\liu_optflow\Coarse2FineTwoFrames.cpp">
+      <Filter>Header Files\thirdparty\liu_optflow</Filter>
+    </ClCompile>
+    <ClCompile Include="include\thirdparty\liu_optflow\GaussianPyramid.cpp">
+      <Filter>Header Files\thirdparty\liu_optflow</Filter>
+    </ClCompile>
+    <ClCompile Include="include\thirdparty\liu_optflow\OpticalFlow.cpp">
+      <Filter>Header Files\thirdparty\liu_optflow</Filter>
+    </ClCompile>
+    <ClCompile Include="include\thirdparty\liu_optflow\Stochastic.cpp">
+      <Filter>Header Files\thirdparty\liu_optflow</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

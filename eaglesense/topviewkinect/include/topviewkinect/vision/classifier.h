@@ -18,6 +18,7 @@ You should have received a copy of the GNU General Public License along with thi
 #include "Python.h"
 
 #include "topviewkinect/skeleton/skeleton.h"
+#include "topviewkinect/vision/log.h"
 
 namespace topviewkinect
 {
@@ -32,12 +33,20 @@ namespace topviewkinect
             PyObject* booster_predict_func;
             PyObject* dmatrix_class;
 
+			PyObject* gesture_recognition_phone_model;
+			PyObject* gesture_recognition_phone_predict_func;
+
         public:
             InteractionClassifier();
             ~InteractionClassifier();
 
-            bool initialize(const std::string& model, const std::vector<std::string>& interactions);
+            bool initialize();
+
+			bool initialize_interaction_classification(const std::string& model, const std::vector<std::string>& interactions);
             bool recognize_interactions(std::vector<topviewkinect::skeleton::Skeleton>& skeletons) const;
+
+			bool initialize_gesture_recognition_phone();
+			bool recognize_gesture_phone(std::vector<topviewkinect::AndroidSensorData>& data, int* gesture_type) const;
         };
     }
 }

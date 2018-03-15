@@ -33,6 +33,9 @@ You should have received a copy of the GNU General Public License along with thi
 #include <opencv2/features2d/features2d.hpp>
 #include <opencv2/objdetect.hpp>
 #include <opencv2/shape/shape_distance.hpp>
+#include <opencv2/cvconfig.h>
+#include <opencv2/core/cuda.hpp>
+#include <opencv2/cudalegacy.hpp>
 #include <opencv2/cudaoptflow.hpp>
 #include <opencv2/cudaarithm.hpp>
 
@@ -51,7 +54,12 @@ You should have received a copy of the GNU General Public License along with thi
 #include "thirdparty/mpi/flowIO.h"
 #include "thirdparty/mpi/colorcode.h"
 
+// Liu OptFlow
+#include "thirdparty/liu_optflow/OpticalFlow.h"
+#include "thirdparty/liu_optflow/project.h"
+#include "thirdparty/liu_optflow/image.h"
 
+// YOLO
 #ifdef _WIN32
 #define OPENCV
 #endif
@@ -179,6 +187,10 @@ static cv::Mat draw_color_body_layers(const cv::Mat& depth_silhouette, const cv:
 	return color_body_layers;
 }
 
+// OPTICAL FLOW
+cv::Ptr<INCVMemAllocator> g_pGPUMemAllocator;
+cv::Ptr<INCVMemAllocator> g_pHostMemAllocator;
+
 namespace topviewkinect
 {
 	namespace vision
@@ -187,13 +199,16 @@ namespace topviewkinect
 			// Kinect
 			kinect_sensor(NULL),
 			kinect_multisource_frame_reader(NULL),
+			kinect_coordinate_mapper(NULL),
 			kinect_frame_id(0),
 			kinect_depth_frame_timestamp(0),
 			kinect_infrared_frame_timestamp(0),
 			kinect_rgb_frame_timestamp(0),
 
 			// Optflow
-			brox_optflow(cv::cuda::BroxOpticalFlow::create(0.197f, 50.0f, 0.8f, 10, 77, 10)),
+			brox_optflow(cv::cuda::BroxOpticalFlow::create(0.197f, 50.0f, 0.8f, 3, 77, 3)),
+			farn_optflow(cv::cuda::FarnebackOpticalFlow::create()),
+			tvl1_optflow(cv::cuda::OpticalFlowDual_TVL1::create(0.25, 0.15, 0.3, 5, 5, 0.01, 100)),
 
 			// Background extraction
 			current_num_background_frames(topviewkinect::vision::REQUIRED_BACKGROUND_FRAMES),
@@ -204,10 +219,11 @@ namespace topviewkinect
 			depth_frame(cv::Mat::zeros(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE, CV_8UC1)),
 			depth_foreground_frame(cv::Mat(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE, CV_8UC1, topviewkinect::color::CV_WHITE)),
 			infrared_frame(cv::Mat::zeros(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE, CV_8UC1)),
-			low_infrared_frame(cv::Mat::zeros(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE, CV_8UC1)),
+			infrared_low_frame(cv::Mat::zeros(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE, CV_8UC1)),
 			rgb_frame(cv::Mat::zeros(topviewkinect::kinect2::CV_COLOR_FRAME_SIZE_DOWNSAMPLED, CV_8UC4)),
 			visualization_frame(cv::Mat::zeros(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE, CV_8UC3)),
-			android_sensor_frame(cv::Mat::zeros(cv::Size(1000, 1000), CV_8UC3)),
+			android_sensor_frame(cv::Mat::zeros(cv::Size(1400, 800), CV_8UC3)),
+			crossmotion_calibration_frame(cv::Mat::zeros(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE, CV_8UC1)),
 
 			// RESTful client
 			restful_client(NULL)
@@ -223,6 +239,7 @@ namespace topviewkinect
 			}
 			topviewkinect::util::safe_release(&this->kinect_sensor);
 			topviewkinect::util::safe_release(&this->kinect_multisource_frame_reader);
+			topviewkinect::util::safe_release(&this->kinect_coordinate_mapper);
 
 			// Stop OpenPose
 			this->op_wrapper.stop();
@@ -259,18 +276,29 @@ namespace topviewkinect
 				return false;
 			}
 
-			// Activity and device recognition
+			// Machine Learning module
+			this->interaction_classifier.initialize();
+
+			// Interaction Recognition
 			std::vector<std::string> interactions{
 				"standing", "sitting", "pointing", "phone", "tablet", "paper"
 			};
 			if (this->configuration.interaction_recognition)
 			{
-				bool classifier_loaded = this->interaction_classifier.initialize(this->configuration.interaction_model, interactions);
+				bool classifier_loaded = this->interaction_classifier.initialize_interaction_classification(this->configuration.interaction_model, interactions);
 				if (!classifier_loaded)
 				{
-					topviewkinect::util::log_println("Failed to load classifier.");
+					topviewkinect::util::log_println("Failed to load interaction classifier.");
 					return false;
 				}
+			}
+
+			// Gesture Recognition
+			bool phone_gesture_recognition = this->interaction_classifier.initialize_gesture_recognition_phone();
+			if (!phone_gesture_recognition)
+			{
+				topviewkinect::util::log_println("Failed to load gesture recognition (phone) classifier.");
+				return false;
 			}
 
 			// RESTful connection
@@ -282,7 +310,7 @@ namespace topviewkinect
 				this->restful_client = new web::http::client::http_client(url_builder.to_uri());
 			}
 
-			// Kinect
+			// KINECT v2
 			HRESULT hr;
 			hr = GetDefaultKinectSensor(&this->kinect_sensor);
 			if (FAILED(hr) || !this->kinect_sensor)
@@ -305,14 +333,36 @@ namespace topviewkinect
 			{
 				kinect_frames_types = FrameSourceTypes_Depth | FrameSourceTypes_LongExposureInfrared | FrameSourceTypes_Color;
 			}
-			hr = this->kinect_sensor->OpenMultiSourceFrameReader(kinect_frames_types, &this->kinect_multisource_frame_reader);
+
+			hr = this->kinect_sensor->get_CoordinateMapper(&this->kinect_coordinate_mapper);
 			if (FAILED(hr))
 			{
-				topviewkinect::util::log_println("Failed to open Kinect multisource frame reader!");
+				topviewkinect::util::log_println("Failed to open Kinect v2 Coordinate Mapper");
 				topviewkinect::util::safe_release(&this->kinect_multisource_frame_reader);
 				return false;
 			}
-			topviewkinect::util::log_println("Connected to Kinect!!!");
+
+			hr = this->kinect_sensor->OpenMultiSourceFrameReader(kinect_frames_types, &this->kinect_multisource_frame_reader);
+			if (FAILED(hr))
+			{
+				topviewkinect::util::log_println("Failed to open Kinect v2 Multisource Frame Reader");
+				topviewkinect::util::safe_release(&this->kinect_multisource_frame_reader);
+				return false;
+			}
+			topviewkinect::util::log_println("Connected to Kinect v2 !");
+
+			// CUDA OPTICAL FLOW NVIDIA API
+			int devId;
+			ncvAssertCUDAReturn(cudaGetDevice(&devId), -1);
+			cudaDeviceProp devProp;
+			ncvAssertCUDAReturn(cudaGetDeviceProperties(&devProp, devId), -1);
+			std::cout << "Using GPU: " << devId << "(" << devProp.name << "), arch=" << devProp.major << "." << devProp.minor << std::endl;
+
+			g_pGPUMemAllocator = cv::Ptr<INCVMemAllocator>(new NCVMemNativeAllocator(NCVMemoryTypeDevice, static_cast<Ncv32u>(devProp.textureAlignment)));
+			ncvAssertPrintReturn(g_pGPUMemAllocator->isInitialized(), "Device memory allocator isn't initialized", -1);
+
+			g_pHostMemAllocator = cv::Ptr<INCVMemAllocator>(new NCVMemNativeAllocator(NCVMemoryTypeHostPageable, static_cast<Ncv32u>(devProp.textureAlignment)));
+			ncvAssertPrintReturn(g_pHostMemAllocator->isInitialized(), "Host memory allocator isn't initialized", -1);
 
 			//// OpenPose
 			//const auto OP_POSE_ENABLE = true;
@@ -378,8 +428,10 @@ namespace topviewkinect
 			// Since the Kinect v2 runs at 30FPS, the new frame may not be ready yet
 			if (FAILED(hr))
 			{
+				//std::cout << ".";
 				return false;
 			}
+			std::cout << std::endl;
 
 			// Get depth frame
 			if (SUCCEEDED(hr))
@@ -418,15 +470,14 @@ namespace topviewkinect
 			}
 
 			// Process depth frame
+			IFrameDescription* p_depth_frame_description = NULL;
+			int depth_width = 0;
+			int depth_height = 0;
+			unsigned short depth_min_distance = 0;
+			unsigned short depth_max_distance = 0;
+			unsigned short* p_depth_buffer = NULL;
 			if (SUCCEEDED(hr))
 			{
-				IFrameDescription* p_depth_frame_description = NULL;
-				int depth_width = 0;
-				int depth_height = 0;
-				unsigned short depth_min_distance = 0;
-				unsigned short depth_max_distance = 0;
-				unsigned short* p_depth_buffer = NULL;
-
 				hr = p_depth_frame->get_FrameDescription(&p_depth_frame_description);
 				if (SUCCEEDED(hr))
 				{
@@ -461,23 +512,16 @@ namespace topviewkinect
 						cv::Mat depth_map(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE, CV_16UC1, p_depth_buffer);
 						depth_map.convertTo(this->depth_frame, CV_8UC1, 256.0 / 8000.0);
 					}
-
-					delete[] p_depth_buffer;
-					p_depth_buffer = NULL;
 				}
-
-				topviewkinect::util::safe_release(&p_depth_frame_description);
 			}
-			topviewkinect::util::safe_release(&p_depth_frame);
 
 			// Process infrared frame
+			IFrameDescription* p_infrared_frame_description = NULL;
+			int infrared_width = 0;
+			int infrared_height = 0;
+			unsigned short* p_infrared_buffer = NULL;
 			if (SUCCEEDED(hr))
 			{
-				IFrameDescription* p_infrared_frame_description = NULL;
-				int infrared_width = 0;
-				int infrared_height = 0;
-				unsigned short* p_infrared_buffer = NULL;
-
 				hr = p_infrared_frame->get_FrameDescription(&p_infrared_frame_description);
 				if (SUCCEEDED(hr))
 				{
@@ -507,28 +551,30 @@ namespace topviewkinect
 						//	p = infrared_map.at<ushort>(position[0], position[1]) >> 8;
 						//});
 						infrared_map.convertTo(this->infrared_frame, CV_8UC1, 256.0 / 8000.0);
-						infrared_map.convertTo(this->low_infrared_frame, CV_8UC1);
+						infrared_map.convertTo(this->infrared_low_frame, CV_8UC1);
+
+						// CrossMotion Calibration
+						this->infrared_frame.copyTo(this->crossmotion_calibration_frame);
+						cv::cvtColor(this->crossmotion_calibration_frame, this->crossmotion_calibration_frame, CV_GRAY2BGR);
+						for (int i = 0; i < this->crossmotion_calibration_points_2d.size(); ++i)
+						{
+							cv::Point infrared_2d = this->crossmotion_calibration_points_2d[i];
+							cv::circle(this->crossmotion_calibration_frame, cv::Point(infrared_2d.x, infrared_2d.y), 3, topviewkinect::color::CV_BGR_RED, -1);
+						}
 					}
-
-					delete[] p_infrared_buffer;
-					p_infrared_buffer = NULL;
 				}
-
-				topviewkinect::util::safe_release(&p_infrared_frame_description);
 			}
-			topviewkinect::util::safe_release(&p_infrared_frame);
 
 			// Process color frame
+			IFrameDescription* p_color_frame_description = NULL;
+			int color_width = 0;
+			int color_height = 0;
+			ColorImageFormat image_format = ColorImageFormat_None;
+			unsigned int color_buffer_size = 0;
+			RGBQUAD* p_color_buffer = NULL;
+			RGBQUAD* p_color_RGBX = new RGBQUAD[topviewkinect::kinect2::COLOR_WIDTH * topviewkinect::kinect2::COLOR_HEIGHT];
 			if (this->configuration.color && SUCCEEDED(hr))
 			{
-				IFrameDescription* p_color_frame_description = NULL;
-				int color_width = 0;
-				int color_height = 0;
-				ColorImageFormat image_format = ColorImageFormat_None;
-				unsigned int color_buffer_size = 0;
-				RGBQUAD* p_color_buffer = NULL;
-				RGBQUAD* p_color_RGBX = new RGBQUAD[topviewkinect::kinect2::COLOR_WIDTH * topviewkinect::kinect2::COLOR_HEIGHT];
-
 				hr = p_color_frame->get_FrameDescription(&p_color_frame_description);
 				if (SUCCEEDED(hr))
 				{
@@ -571,16 +617,60 @@ namespace topviewkinect
 						unsigned char* byte_image = reinterpret_cast<unsigned char*>(p_color_buffer);
 						cv::Mat m = cv::Mat(topviewkinect::kinect2::CV_COLOR_FRAME_SIZE, CV_8UC4, reinterpret_cast<void*>(byte_image));
 						cv::pyrDown(m, this->rgb_frame, topviewkinect::kinect2::CV_COLOR_FRAME_SIZE_DOWNSAMPLED);
+					}
+				}
+			}
 
-						delete[] p_color_buffer;
-						p_color_buffer = NULL;
+			// Calibration
+			if (SUCCEEDED(hr))
+			{
+				int num_calibration_points = this->crossmotion_calibration_points_to_add.size();
+
+				for (int i = 0; i < num_calibration_points; ++i)
+				{
+					const cv::Point infrared_2d = this->crossmotion_calibration_points_to_add[i];
+
+					DepthSpacePoint dsp = DepthSpacePoint{ static_cast<float>(infrared_2d.x), static_cast<float>(infrared_2d.y) };
+					long depth_index = dsp.Y * topviewkinect::kinect2::DEPTH_WIDTH + dsp.X;
+					unsigned short depth = p_depth_buffer[depth_index];
+					CameraSpacePoint csp;
+
+					HRESULT mapper_hr = this->kinect_coordinate_mapper->MapDepthPointToCameraSpace(dsp, depth, &csp);
+					if (SUCCEEDED(mapper_hr))
+					{
+						std::cout << "mapper : success" << std::endl;
+						if (csp.X != -std::numeric_limits<float>::infinity() && csp.Y != -std::numeric_limits<float>::infinity())
+						{
+							std::cout << "depth : " << dsp.X << " , " << dsp.Y << std::endl;
+							std::cout << "csp : " << csp.X << " , " << csp.Y << " , " << csp.Z << std::endl;
+							this->crossmotion_calibration_points_2d.push_back(infrared_2d);
+							this->crossmotion_calibration_points_3d.push_back(csp);
+						}
+					}
+					else
+					{
+						std::cout << "mapper : fail" << std::endl;
 					}
 				}
 
-				topviewkinect::util::safe_release(&p_color_frame_description);
+				this->crossmotion_calibration_points_to_add.clear();
 			}
-			topviewkinect::util::safe_release(&p_color_frame);
 
+			// Clean Up
+			delete[] p_depth_buffer;
+			p_depth_buffer = NULL;
+			topviewkinect::util::safe_release(&p_depth_frame_description);
+			topviewkinect::util::safe_release(&p_depth_frame);
+
+			delete[] p_infrared_buffer;
+			p_infrared_buffer = NULL;
+			topviewkinect::util::safe_release(&p_infrared_frame_description);
+			topviewkinect::util::safe_release(&p_infrared_frame);
+
+			delete[] p_color_buffer;
+			p_color_buffer = NULL;
+			topviewkinect::util::safe_release(&p_color_frame_description);
+			topviewkinect::util::safe_release(&p_color_frame);
 			topviewkinect::util::safe_release(&p_multisource_frame);
 
 			if (SUCCEEDED(hr))
@@ -590,39 +680,98 @@ namespace topviewkinect
 			}
 			else
 			{
-				topviewkinect::util::log_println("No Kinect frames.");
 				return false;
 			}
 		}
 
-		bool TopViewSpace::refresh_android_sensor_data(const std::deque<topviewkinect::AndroidSensorData>& data)
+		bool TopViewSpace::refresh_android_sensor_data(topviewkinect::AndroidSensorData& data)
 		{
-			//this->android_sensor_data = data;
+			this->android_sensor_mutex.lock();
+			this->android_sensor_data.push_back(data);
+			this->android_sensor_data_tmp.push_back(data);
+			if (this->android_sensor_data.size() > 250)
+			{
+				this->android_sensor_data.pop_front();
+			}
+			this->android_sensor_mutex.unlock();
+			return true;
+		}
 
+		bool TopViewSpace::refresh_android_sensor_frame()
+		{
 			// update sensor plot
 			this->android_sensor_frame.setTo(topviewkinect::color::CV_BGR_WHITE);
 
 			// device acceleration, X axis
-			int init_x = 20, init_y = 300;
-			cv::line(this->android_sensor_frame, cv::Point(20, init_y), cv::Point(1000, 300), topviewkinect::color::CV_BGR_BLACK, 1);
-			cv::line(this->android_sensor_frame, cv::Point(20, 100), cv::Point(20, 412), topviewkinect::color::CV_BGR_BLACK, 1);
+			int accel_x_origin_x = 20, accel_x_origin_y = 250;
+			{
+				cv::putText(this->android_sensor_frame, "0 - ", cv::Point(5, 150), CV_FONT_HERSHEY_SIMPLEX, 0.3, topviewkinect::color::CV_BGR_BLACK, 1);
+				cv::line(this->android_sensor_frame, cv::Point(accel_x_origin_x, accel_x_origin_y), cv::Point(accel_x_origin_x, 50), topviewkinect::color::CV_BGR_BLACK, 1);
+				cv::line(this->android_sensor_frame, cv::Point(accel_x_origin_x, accel_x_origin_y), cv::Point(1200, accel_x_origin_y), topviewkinect::color::CV_BGR_BLACK, 1);
+			}
 
 			// device acceleration, Y axis
-			int linear_accel_init_x = 20, linear_accel_init_y = 800;
-			cv::line(this->android_sensor_frame, cv::Point(20, linear_accel_init_y), cv::Point(1000, 800), topviewkinect::color::CV_BGR_BLACK, 1);
-			cv::line(this->android_sensor_frame, cv::Point(20, 500), cv::Point(20, 1000), topviewkinect::color::CV_BGR_BLACK, 1);
+			int accel_y_origin_x = 20, accel_y_origin_y = 500;
+			{
+				cv::putText(this->android_sensor_frame, "0 - ", cv::Point(5, 400), CV_FONT_HERSHEY_SIMPLEX, 0.3, topviewkinect::color::CV_BGR_BLACK, 1);
+				cv::line(this->android_sensor_frame, cv::Point(accel_y_origin_x, accel_y_origin_y), cv::Point(accel_y_origin_x, 300), topviewkinect::color::CV_BGR_BLACK, 1);
+				cv::line(this->android_sensor_frame, cv::Point(accel_y_origin_x, accel_y_origin_y), cv::Point(1200, accel_y_origin_y), topviewkinect::color::CV_BGR_BLACK, 1);
+			}
 
+			// device acceleration, Z axis
+			int accel_z_origin_x = 20, accel_z_origin_y = 750;
+			{
+				cv::putText(this->android_sensor_frame, "0 - ", cv::Point(5, 650), CV_FONT_HERSHEY_SIMPLEX, 0.3, topviewkinect::color::CV_BGR_BLACK, 1);
+				cv::line(this->android_sensor_frame, cv::Point(accel_z_origin_x, accel_z_origin_y), cv::Point(accel_z_origin_x, 550), topviewkinect::color::CV_BGR_BLACK, 1);
+				cv::line(this->android_sensor_frame, cv::Point(accel_z_origin_x, accel_z_origin_y), cv::Point(1200, accel_z_origin_y), topviewkinect::color::CV_BGR_BLACK, 1);
+			}
 
 			// data
-			for (int i = 0; i < data.size(); i++)
+			this->android_sensor_mutex.lock();
+			for (int i = 0; i < this->android_sensor_data.size(); ++i)
 			{
-				const topviewkinect::AndroidSensorData sensor_data = data[i];
+				const topviewkinect::AndroidSensorData sensor_data = this->android_sensor_data[i];
 
-				// device linear accel X
-				cv::circle(this->android_sensor_frame, cv::Point(init_x + i * 3, init_y - (sensor_data.linear_accel_x) * 10), 3, topviewkinect::color::CV_BGR_GREEN, -1);
+				// device acceleration X
+				cv::circle(this->android_sensor_frame, cv::Point(accel_x_origin_x + i * 5, (accel_x_origin_y - 100) - (sensor_data.linear_accel_x) * 10), 3, topviewkinect::color::CV_BGR_RED, -1);
 
-				// device linear accel Y
-				cv::circle(this->android_sensor_frame, cv::Point(linear_accel_init_x + i * 3, linear_accel_init_y - (sensor_data.linear_accel_y) * 10), 3, topviewkinect::color::CV_BGR_RED, -1);
+				// device acceleration Y
+				cv::circle(this->android_sensor_frame, cv::Point(accel_y_origin_x + i * 5, (accel_y_origin_y - 100) - (sensor_data.linear_accel_y) * 10), 3, topviewkinect::color::CV_BGR_GREEN, -1);
+
+				// device acceleration Z
+				cv::circle(this->android_sensor_frame, cv::Point(accel_z_origin_x + i * 5, (accel_z_origin_y - 100) - (sensor_data.linear_accel_z) * 10), 3, topviewkinect::color::CV_BGR_BLUE, -1);
+			}
+			this->android_sensor_mutex.unlock();
+
+			return true;
+		}
+
+		bool TopViewSpace::process_android_sensor_data() 
+		{
+			// Recognize gesture
+			std::vector<topviewkinect::AndroidSensorData> android_sensor_sample;
+
+			this->android_sensor_mutex.lock();
+			int sensor_data_size = this->android_sensor_data.size();
+			if (sensor_data_size >= 200)
+			{
+				for (int i = 0; i < 200; ++i)
+				{
+					int index = sensor_data_size - 200 + i;
+					android_sensor_sample.push_back(this->android_sensor_data[index]);
+				}
+			}
+			this->android_sensor_mutex.unlock();
+
+			int gesture_type;
+			bool predicted = this->interaction_classifier.recognize_gesture_phone(android_sensor_sample, &gesture_type);
+			if (predicted)
+			{
+				if (gesture_type == 1)
+				{
+					std::cout << "IT WORKS!!!!!!!!!!!!!!!!!!!!" << std::endl;
+				}
+				std::cout << "gesture : " << gesture_type << std::endl;
 			}
 
 			return true;
@@ -631,6 +780,210 @@ namespace topviewkinect
 		const int TopViewSpace::get_kinect_frame_id() const
 		{
 			return this->kinect_frame_id;
+		}
+
+		// Sensor Fusion
+
+		//cv::Mat calibration_im_infrared, calibration_im_depth;
+		//cv::Mat calibration_im_infrared_annotated;
+		//std::string calibration_window_name = "Calibration Image", calibration_depth_window_name = "Calibration Image (Depth)";
+		//std::vector<cv::Point2i> calibration_mouse_clicks;
+		//cv::Point next_calibration_point;
+		//bool calibration_drawing = false;
+
+		CameraSpacePoint* infrared_to_csps = new CameraSpacePoint[topviewkinect::kinect2::DEPTH_WIDTH * topviewkinect::kinect2::DEPTH_HEIGHT];
+		CameraSpacePoint* color_to_camera_space_points = new CameraSpacePoint[topviewkinect::kinect2::COLOR_WIDTH * topviewkinect::kinect2::COLOR_HEIGHT];
+		DepthSpacePoint* dsps = new DepthSpacePoint[topviewkinect::kinect2::COLOR_WIDTH * topviewkinect::kinect2::COLOR_HEIGHT];
+
+		// Must done online
+		bool TopViewSpace::calibrate_sensor_fusion(const cv::Point& new_point)
+		{
+			this->crossmotion_calibration_points_to_add.push_back(cv::Point{ new_point.x, new_point.y });
+
+			//// infrared
+			////calibration_im_infrared = cv::imread("D:\\p_eaglesense\\eaglesense\\data\\topviewkinect\\3006\\infrared\\calibration\\451.jpeg", CV_LOAD_IMAGE_GRAYSCALE);
+			//this->infrared_frame.copyTo(this->crossmotion_calibration_frame);
+			//cv::cvtColor(this->crossmotion_calibration_frame, this->crossmotion_calibration_frame, CV_GRAY2BGR);
+			////cv::namedWindow(calibration_window_name);
+			////cv::setMouseCallback(calibration_window_name, calibration_on_mouse, this);
+			////cv::imshow(calibration_window_name, calibration_im_infrared_annotated);
+
+			////calibration_im_depth = cv::imread("D:\\p_eaglesense\\eaglesense\\data\\topviewkinect\\3006\\depth\\calibration\\451.jpeg", CV_LOAD_IMAGE_GRAYSCALE);
+			////this->depth_frame.copyTo(calibration_im_depth);
+			////cv::imshow(calibration_depth_window_name, calibration_im_depth);
+
+			//int num_depth_points = topviewkinect::kinect2::DEPTH_WIDTH * topviewkinect::kinect2::DEPTH_HEIGHT;
+			//int num_calibration_points = calibration_points.size();
+
+			//DepthSpacePoint* calibration_dsps = new DepthSpacePoint[num_calibration_points];
+			//for (int i = 0; i < calibration_points.size(); ++i)
+			//{
+			//	const cv::Point calibration_2d_point = calibration_points[i];
+			//	DepthSpacePoint dsp = { calibration_2d_point.x, calibration_2d_point.y };
+			//	calibration_dsps[i] = dsp;
+			//}
+
+			//CameraSpacePoint* calibration_csps = new CameraSpacePoint[num_calibration_points];
+			//HRESULT hr = this->kinect_coordinate_mapper->MapDepthPointsToCameraSpace(num_calibration_points, calibration_dsps, num_depth_points, this->depth_frame.ptr<UINT16>(), num_calibration_points, calibration_csps);
+			//if (SUCCEEDED(hr))
+			//{
+			//	std::cout << "hr : success" << std::endl;
+			//}
+			//else
+			//{
+			//	std::cout << "hr : failed" << std::endl;
+			//}
+
+			//for (int i = 0; i < calibration_points.size(); ++i)
+			//{
+			//	DepthSpacePoint dsp = calibration_dsps[i];
+			//	CameraSpacePoint csp = calibration_csps[i];
+			//	std::cout << "depth : " << dsp.X << " , " << dsp.Y << std::endl;
+			//	std::cout << "csp : " << csp.X << " , " << csp.Y << " , " << csp.Z << std::endl;
+			//	if (csp.X != -std::numeric_limits<float>::infinity() && csp.Y != -std::numeric_limits<float>::infinity())
+			//	{
+			//		//int depth_X = static_cast<int>(dsp.X + 0.5f);
+			//		//int depth_Y = static_cast<int>(dsp.Y + 0.5f);
+			//		//if ((depth_X >= 0 && depth_X < topviewkinect::kinect2::DEPTH_WIDTH) && (depth_Y >= 0 && depth_Y < topviewkinect::kinect2::DEPTH_HEIGHT))
+			//		//{
+			//		cv::circle(this->crossmotion_calibration_frame, cv::Point(dsp.X, dsp.Y), 3, topviewkinect::color::CV_BGR_RED, -1);
+			//		//}
+			//	}
+			//	else
+			//	{
+			//		std::cout << "-inf" << std::endl;
+			//	}
+			//}
+
+			//// Redraw bounding box and rectangle
+			//cv::circle(calibration_im_infrared_annotated, cv::Point(x, y), 3, topviewkinect::color::CV_BGR_RED, -1);
+			////cv::circle(calibration_im_infrared_annotated, next_calibration_point, 5, topviewkinect::color::CV_BGR_RED, -1);
+			//cv::imshow(calibration_window_name, calibration_im_infrared_annotated);
+
+			//cv::circle(calibration_im_depth, cv::Point(x, y), 3, topviewkinect::color::CV_WHITE, -1);
+			//cv::imshow(calibration_depth_window_name, calibration_im_depth);
+
+			////calibration_mouse_clicks.push_back(cv::Point2i(next_calibration_point.x, next_calibration_point.y));
+
+			//calibration_drawing = false;
+
+			//// Show on depth image
+			//long infrared_index = (long)(y * topviewkinect::kinect2::DEPTH_WIDTH + x);
+			//CameraSpacePoint csp = infrared_to_csps[infrared_index];
+			////calibration_world_coordinates.push_back(DepthSpacePoint{ -csp.X, -csp.Y, csp.Z });
+
+			//std::cout << "index : " << infrared_index << std::endl;
+
+
+			//while (true)
+			//{
+			//	int ascii_keypress = cv::waitKeyEx(0);
+			//	std::cout << "ascii : " << ascii_keypress << std::endl;
+			//	if (ascii_keypress == 27)
+			//	{
+			//		break;
+			//	}
+			//}
+
+			return true;
+		}
+
+		void cross_product_normal(float vec_ab[3], float vec_ac[3], float* vec_res)
+		{
+			float vec_n_x = vec_ab[1] * vec_ac[2] - vec_ab[2] * vec_ac[1];
+			float vec_n_y = vec_ab[2] * vec_ac[0] - vec_ab[0] * vec_ac[2];
+			float vec_n_z = vec_ab[0] * vec_ac[1] - vec_ab[1] * vec_ac[0];
+			float sum = vec_n_x + vec_n_y + vec_n_z;
+
+			float unit_n_x = vec_n_x / sum;
+			float unit_n_y = vec_n_y / sum;
+			float unit_n_z = vec_n_z / sum;
+
+			vec_res[0] = unit_n_x;
+			vec_res[1] = unit_n_y;
+			vec_res[2] = unit_n_z;
+		}
+
+		bool TopViewSpace::offline_calibration()
+		{
+			// infrared
+			cv::Mat calibration_im_depth = cv::imread("D:\\p_eaglesense\\eaglesense\\data\\topviewkinect\\3007\\depth\\calibration\\400.jpeg", CV_LOAD_IMAGE_GRAYSCALE);
+			cv::Mat calibration_im_infrared = cv::imread("D:\\p_eaglesense\\eaglesense\\data\\topviewkinect\\3007\\infrared\\calibration\\400.jpeg", CV_LOAD_IMAGE_GRAYSCALE);
+			cv::Mat calibration_im_rgb = cv::imread("D:\\p_eaglesense\\eaglesense\\data\\topviewkinect\\3007\\rgb\\calibration\\400.jpeg", CV_LOAD_IMAGE_COLOR);
+			cv::cvtColor(calibration_im_infrared, calibration_im_infrared, CV_GRAY2BGR);
+
+			// draw calibration points
+			cv::circle(calibration_im_infrared, cv::Point(201, 184), 3, topviewkinect::color::CV_BGR_RED, -1);
+			cv::circle(calibration_im_infrared, cv::Point(198, 147), 3, topviewkinect::color::CV_BGR_RED, -1);
+			cv::circle(calibration_im_infrared, cv::Point(268, 145), 3, topviewkinect::color::CV_BGR_RED, -1);
+			cv::circle(calibration_im_infrared, cv::Point(270, 187), 3, topviewkinect::color::CV_BGR_RED, -1);
+
+			// three points from infrared image
+			float a[3] = { -0.43404, 0.144404, 2.596 };
+			float b[3] = { -0.501964,0.447939,2.867 };
+			float c[3] = { 0.0445801,0.466749,2.881 };
+			float vec_ab[3] = { b[0] - a[0], b[1] - a[1], b[2] - a[2] };
+			float vec_ac[3] = { c[0] - a[0], c[1] - a[1], c[2] - a[2] };
+
+			// k_1 = n_k
+			float vec_n_k[3];
+			cross_product_normal(vec_ab, vec_ac, vec_n_k);
+
+			// g_k kinect gravity
+			float g_k[3] = { -0.771, 6.607, -7.206 };
+
+			// k_2 = n_k x g_k
+			float vec_k_2[3];
+			cross_product_normal(vec_n_k, g_k, vec_k_2);
+
+			// k_3 = n_k x k_2
+			float vec_k_3[3];
+			cross_product_normal(vec_n_k, vec_k_2, vec_k_3);
+
+			// K
+			float K[3][3] = {
+				{ vec_n_k[0], vec_n_k[1], vec_n_k[2] },
+				{ vec_k_2[0], vec_k_2[1], vec_k_2[2] },
+				{ vec_k_3[0], vec_k_3[1], vec_k_3[2] }
+			};
+
+			std::cout << "k_1 : " << vec_n_k[0] << " , " << vec_n_k[1] << " , " << vec_n_k[2] << std::endl;
+			std::cout << "k_2 : " << vec_k_2[0] << " , " << vec_k_2[1] << " , " << vec_k_2[2] << std::endl;
+			std::cout << "k_2 : " << vec_k_3[0] << " , " << vec_k_3[1] << " , " << vec_k_3[2] << std::endl;
+
+			// computer surface normal n_w
+			//frame_id, depth_time, addr, accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z, orientation_x, orientation_y, orientation_z, linear_accel_x, linear_accel_y, linear_accel_z, gravity_x, gravity_y, gravity_z, rotation_x, rotation_y, rotation_z
+			//451,735653787547,0.0.0.0,-0.006,0.040,-9.920,-0.000,-0.000,0.000,80.258,-179.806,-0.073,-0.002,0.003,-0.010,-0.012,0.033,-9.807,0.765,-0.645,-0.002
+			float phone_unit_vec[3] = { 0, 0, 1 };
+			float phone_orientation[3] = { 80.258,-179.806,-0.073 };
+
+			// g_w phone gravity
+			float g_w[3] = { -0.012,0.033,-9.807 };
+
+			// w_1 = n_w
+			float n_w[3];
+			cross_product_normal(phone_unit_vec, phone_orientation, n_w);
+
+			// w_2
+			float w_2[3];
+			cross_product_normal(n_w, g_w, w_2);
+
+			// w_3
+			float w_3[3];
+			cross_product_normal(n_w, w_2, w_3);
+
+			// W
+			float W[3][3] = {
+				{ n_w[0], n_w[1], n_w[2] },
+				{ w_2[0], w_2[1], w_2[2] },
+				{ w_3[0], w_3[1], w_3[2] }
+			};
+
+			cv::imshow("calibration_im_depth", calibration_im_depth);
+			cv::imshow("calibration_im_infrared", calibration_im_infrared);
+			cv::imshow("calibration_im_rgb", calibration_im_rgb);
+
+			return true;
 		}
 
 		// Replay
@@ -668,8 +1021,9 @@ namespace topviewkinect
 			cv::Mat rgb_frame = cv::imread(std::get<3>(next_frames.second), CV_LOAD_IMAGE_COLOR);
 
 			// Load Android sensor data
-			this->android_sensor_data = this->interaction_log.get_android_sensor_data();
+			//this->android_sensor_data = this->interaction_log.get_android_sensor_data();
 
+			// BUG: cv::imread no image
 			this->apply_kinect_multisource_frame(next_frames.first, depth_frame, infrared_frame, low_infrared_frame, rgb_frame);
 
 			topviewkinect::util::log_println("Dataset (" + std::to_string(dataset_id) + ") Size: " + std::to_string(dataset_frames.size()) + ".");
@@ -685,7 +1039,7 @@ namespace topviewkinect
 			cv::Mat rgb_frame = cv::imread(std::get<3>(prev_frames.second), CV_LOAD_IMAGE_COLOR);
 
 			// Load Android sensor data
-			this->android_sensor_data = this->interaction_log.get_android_sensor_data();
+			//this->android_sensor_data = this->interaction_log.get_android_sensor_data();
 
 			this->apply_kinect_multisource_frame(prev_frames.first, depth_frame, infrared_frame, low_infrared_frame, rgb_frame);
 		}
@@ -699,25 +1053,26 @@ namespace topviewkinect
 			cv::Mat rgb_frame = cv::imread(std::get<3>(next_frames.second), CV_LOAD_IMAGE_COLOR);
 
 			// Load Android sensor data
-			this->android_sensor_data = this->interaction_log.get_android_sensor_data();
+			//this->android_sensor_data = this->interaction_log.get_android_sensor_data();
 
 			this->apply_kinect_multisource_frame(next_frames.first, depth_frame, infrared_frame, low_infrared_frame, rgb_frame);
 		}
 
-		void TopViewSpace::apply_kinect_multisource_frame(const int frame_id, const cv::Mat& depth_frame, const cv::Mat& infrared_frame, const cv::Mat& low_infrared_frame, const cv::Mat& rgb_frame)
+		void TopViewSpace::apply_kinect_multisource_frame(const int frame_id, const cv::Mat& depth_frame, const cv::Mat& infrared_frame, const cv::Mat& infrared_low_frame, const cv::Mat& rgb_frame)
 		{
 			this->kinect_frame_id = frame_id;
 			this->kinect_multisource_frame_arrived = true;
 			depth_frame.copyTo(this->depth_frame);
 			infrared_frame.copyTo(this->infrared_frame);
-			if (!low_infrared_frame.empty())
+			if (!infrared_low_frame.empty())
 			{
-				low_infrared_frame.copyTo(this->low_infrared_frame);
+				infrared_low_frame.copyTo(this->infrared_low_frame);
 			}
 			if (!rgb_frame.empty())
 			{
 				rgb_frame.copyTo(this->rgb_frame);
 			}
+
 			this->process_kinect_frames();
 		}
 
@@ -752,20 +1107,41 @@ namespace topviewkinect
 			}
 			else
 			{
-				this->interaction_log.save_multisource_frames(this->kinect_depth_frame_timestamp, this->depth_frame, this->kinect_infrared_frame_timestamp, this->infrared_frame, this->low_infrared_frame, this->kinect_rgb_frame_timestamp, this->rgb_frame);
+				this->interaction_log.save_multisource_frames(this->kinect_depth_frame_timestamp, this->depth_frame, this->kinect_infrared_frame_timestamp, this->infrared_frame, this->infrared_low_frame, this->kinect_rgb_frame_timestamp, this->rgb_frame);
 				return true;
 			}
 		}
 
-		bool TopViewSpace::save_android_sensor_data(const topviewkinect::AndroidSensorData& data)
+		void TopViewSpace::set_android_sensor_label(const std::string& label)
 		{
-			this->interaction_log.save_android_sensor_data(this->kinect_depth_frame_timestamp, data);
+			if (label.compare("bring-device-start") == 0)
+			{
+				this->android_sensor_label = 1;
+			}
+			if (label.compare("bring-device-end") == 0)
+			{
+				this->android_sensor_label = 0;
+			}
+		}
+
+		bool TopViewSpace::save_android_sensor_data()
+		{
+			this->android_sensor_mutex.lock();
+			this->interaction_log.save_android_sensor_data(this->kinect_depth_frame_timestamp, android_sensor_data_tmp, this->android_sensor_label);
+			this->android_sensor_data_tmp.clear();
+			this->android_sensor_mutex.unlock();
 			return true;
 		}
 
 		bool TopViewSpace::save_visualization()
 		{
 			this->interaction_log.save_visualization(this->kinect_frame_id, this->visualization_frame);
+			return true;
+		}
+
+		bool TopViewSpace::save_calibration()
+		{
+			this->interaction_log.save_calibration(this->crossmotion_calibration_points_2d, this->crossmotion_calibration_points_3d);
 			return true;
 		}
 
@@ -815,6 +1191,8 @@ namespace topviewkinect
 				return false;
 			}
 
+			std::cout << "Frame ID : " << this->kinect_frame_id << std::endl;
+
 			// Per-frame processing time
 			std::chrono::time_point<std::chrono::high_resolution_clock> start = std::chrono::high_resolution_clock::now();
 
@@ -827,10 +1205,6 @@ namespace topviewkinect
 				// Show calibration status
 				this->visualization_frame.setTo(topviewkinect::color::CV_BGR_BLACK);
 				cv::putText(this->visualization_frame, "Calibrating...", cv::Point(20, 30), cv::FONT_HERSHEY_SIMPLEX, 1, topviewkinect::color::CV_BGR_WHITE);
-
-				// Print calibration time
-				auto calibration_duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start);
-				std::cout << "calibration time: " << calibration_duration.count() << std::endl;
 			}
 			// Tracking
 			else
@@ -839,14 +1213,14 @@ namespace topviewkinect
 				this->p_background_extractor->apply(this->depth_frame, this->foreground_mask, 0);
 				this->depth_foreground_frame.setTo(topviewkinect::color::CV_BGR_BLACK);
 				this->depth_frame.copyTo(this->depth_foreground_frame, this->foreground_mask);
-				cv::imshow("initial depth foreground", this->depth_foreground_frame);
+				//cv::imshow("initial depth foreground", this->depth_foreground_frame);
 				cv::medianBlur(this->depth_foreground_frame, this->depth_foreground_frame, topviewkinect::vision::FOREGROUND_FILTER_KERNEL);
 				cv::Rect border(cv::Point(0, 0), this->depth_foreground_frame.size());
 				cv::rectangle(this->depth_foreground_frame, border, topviewkinect::color::CV_BLACK, 5);
-				cv::imshow("medium-blur depth foreground", this->depth_foreground_frame);
+				//cv::imshow("medium-blur depth foreground", this->depth_foreground_frame);
 				// Filtering time
 				auto filtering_duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start);
-				std::cout << "filtering time: " << filtering_duration.count() << std::endl;
+				std::cout << "filtering time: " << filtering_duration.count() << " msec" << std::endl;
 
 				// Detect skeletons and features
 
@@ -854,7 +1228,13 @@ namespace topviewkinect
 				//std::chrono::time_point<std::chrono::high_resolution_clock> features_start = std::chrono::high_resolution_clock::now();
 				//long long features_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - features_start).count();
 
+				std::chrono::time_point<std::chrono::high_resolution_clock> computation_start = std::chrono::high_resolution_clock::now();
+
 				this->detect_skeletons();
+
+				auto computation_duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - computation_start);
+				std::cout << "computation time: " << computation_duration.count() << " msec" << std::endl;
+
 				//auto skeleton_duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start);
 				//std::cout << "detect skeleton time: " << skeleton_duration.count() << std::endl;
 
@@ -937,8 +1317,7 @@ namespace topviewkinect
 				//}
 
 				// Android sensor data
-				std::cout << "frame id: " << this->kinect_frame_id << std::endl;
-				topviewkinect::util::log_println(this->android_sensor_data.to_str());
+				//topviewkinect::util::log_println(this->android_sensor_data.to_str());
 
 				//this->combine_openpose_and_depth();
 
@@ -1044,10 +1423,6 @@ namespace topviewkinect
 					this->restful_client->request(web::http::methods::POST, "/topviewkinect/skeletons", this->skeletons_json());
 				}
 			}
-
-			// Print total processing time
-			auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start);
-			std::cout << "total time: " << duration.count() << std::endl;
 
 			this->kinect_multisource_frame_arrived = false;
 			return true;
@@ -1290,14 +1665,14 @@ namespace topviewkinect
 			}
 		}
 
-		static void drawOpticalFlow_2(const cv::Mat_<float>& flowx, const  cv::Mat_<float>& flowy, cv::Mat& dst, float maxmotion = -1)
+		static void draw_optflow_arrows(const cv::Mat_<float>& flowx, const  cv::Mat_<float>& flowy, cv::Mat& dst)
 		{
 			for (int y = 0; y < flowx.rows; y += 8)
 			{
 				for (int x = 0; x < flowx.cols; x += 8)
 				{
 					cv::Point2f u(flowx(y, x), flowy(y, x));
-					if (cv::sqrt(u.x * u.x + u.y * u.y) < 0.5)
+					if (cv::sqrt(u.x * u.x + u.y * u.y) < 1)
 					{
 						continue;
 					}
@@ -1307,7 +1682,7 @@ namespace topviewkinect
 			}
 		}
 
-		static void showFlow(const char* name, const cv::cuda::GpuMat& d_flow)
+		static void draw_optflow_heatmap(const char* name, const cv::cuda::GpuMat& d_flow)
 		{
 			cv::cuda::GpuMat planes[2];
 			cv::cuda::split(d_flow, planes);
@@ -1316,51 +1691,304 @@ namespace topviewkinect
 			cv::Mat flowy(planes[1]);
 
 			cv::Mat out;
-			drawOpticalFlow(flowx, flowy, out, 10);
+			drawOpticalFlow(flowx, flowy, out);
 
 			cv::imshow(name, out);
 		}
 
 		cv::Mat TopViewSpace::compute_optical_flow(const cv::Mat& src_prev, const cv::Mat& src_next, cv::Mat& viz, const char* name)
 		{
+
 			cv::cuda::GpuMat d_frame0(src_prev);
 			cv::cuda::GpuMat d_frame1(src_next);
 			cv::cuda::GpuMat d_flow(src_prev.size(), CV_32FC2);
 
-			cv::cuda::GpuMat d_frame0f;
-			cv::cuda::GpuMat d_frame1f;
-			d_frame0.convertTo(d_frame0f, CV_32F, 1.0 / 255.0);
-			d_frame1.convertTo(d_frame1f, CV_32F, 1.0 / 255.0);
 
-			const int64 start = cv::getTickCount();
-			this->brox_optflow->calc(d_frame0f, d_frame1f, d_flow);
+			// Brox
+			{
+				cv::cuda::GpuMat d_frame0f;
+				cv::cuda::GpuMat d_frame1f;
 
-			const double timeSec = (cv::getTickCount() - start) / cv::getTickFrequency();
-			cout << "Brox : " << timeSec << " sec" << endl;
+				d_frame0.convertTo(d_frame0f, CV_32F, 1.0 / 255.0);
+				d_frame1.convertTo(d_frame1f, CV_32F, 1.0 / 255.0);
 
-			showFlow(name, d_flow);
+				const int64 brox_start = cv::getTickCount();
 
-			cv::cuda::GpuMat planes[2];
-			cv::cuda::split(d_flow, planes);
-			cv::Mat flowx(planes[0]);
-			cv::Mat flowy(planes[1]);
-			drawOpticalFlow_2(flowx, flowy, viz, 10);
+				this->brox_optflow->calc(d_frame0f, d_frame1f, d_flow);
 
-			//// optical flow visualization
-			//for (int y = 0; y < viz.rows; y += 16)
+				const double brox_duration_sec = (cv::getTickCount() - brox_start) / cv::getTickFrequency();
+				std::cout << "brox_optflow time: " << brox_duration_sec * 1000 << " ms" << " " << brox_duration_sec << " s" << std::endl;
+
+				cv::cuda::GpuMat planes[2];
+				cv::cuda::split(d_flow, planes);
+				cv::Mat flowx(planes[0]);
+				cv::Mat flowy(planes[1]);
+
+				draw_optflow_heatmap(name, d_flow);
+				draw_optflow_arrows(flowx, flowy, viz);
+			}
+
+			//// FARN
 			//{
-			//	for (int x = 0; x < viz.cols; x += 16)
-			//	{
-			//		const cv::Point2f& fxy = flow.at<cv::Point2f>(y, x);
-			//		cv::line(viz, cv::Point(x, y), cv::Point(cvRound(x + fxy.x), cvRound(y + fxy.y)), 255, 1);
-			//		cv::circle(viz, cv::Point(x, y), 2, 255, -1);
-			//	}
+			//	const int64 farn_start = cv::getTickCount();
+
+			//	this->farn_optflow->calc(d_frame0, d_frame1, d_flow);
+
+			//	cv::cuda::GpuMat planes[2];
+			//	cv::cuda::split(d_flow, planes);
+			//	cv::Mat flowx(planes[0]);
+			//	cv::Mat flowy(planes[1]);
+
+			//	draw_optflow_heatmap("farn optflow", d_flow);
+			//	draw_optflow_arrows(flowx, flowy, viz);
+
+			//	const double farn_duration_sec = (cv::getTickCount() - farn_start) / cv::getTickFrequency();
+			//	std::cout << "farn_optflow time: " << farn_duration_sec * 1000 << " ms" << " " << farn_duration_sec << " s" << std::endl;
+			//}
+
+
+			//// TVL1
+			//{
+			//	const int64 tvl1_start = cv::getTickCount();
+
+			//	this->tvl1_optflow->calc(d_frame0, d_frame1, d_flow);
+
+			//	cv::cuda::GpuMat planes[2];
+			//	cv::cuda::split(d_flow, planes);
+			//	cv::Mat flowx(planes[0]);
+			//	cv::Mat flowy(planes[1]);
+
+			//	draw_optflow_heatmap("tvl1 optflow", d_flow);
+			//	draw_optflow_arrows(flowx, flowy, viz);
+
+			//	const double tvl1_duration_sec = (cv::getTickCount() - tvl1_start) / cv::getTickFrequency();
+			//	std::cout << "tvl1_optflow time: " << tvl1_duration_sec * 1000 << " ms" << " " << tvl1_duration_sec << " s" << std::endl;
 			//}
 
 			return viz;
 		}
 
-		void TopViewSpace::detect_skeletons()
+		template<class T>
+		NCVStatus CopyData(const IplImage *image, const NCVMatrixAlloc<Ncv32f>& dst)
+		{
+			unsigned char *row = reinterpret_cast<unsigned char*> (image->imageData);
+			T convert;
+			for (int i = 0; i < image->height; ++i)
+			{
+				for (int j = 0; j < image->width; ++j)
+				{
+					if (image->nChannels < 3)
+					{
+						dst.ptr()[j + i*dst.stride()] = static_cast<float>(*(row + j*image->nChannels)) / 255.0f;
+					}
+					else
+					{
+						unsigned char *color = row + j * image->nChannels;
+						dst.ptr()[j + i*dst.stride()] = convert(color[0], color[1], color[2]);
+					}
+				}
+				row += image->widthStep;
+			}
+			return NCV_SUCCESS;
+		}
+
+		template<class T>
+		NCVStatus CopyData(IplImage *image, cv::Ptr<NCVMatrixAlloc<Ncv32f>>& dst)
+		{
+			dst = cv::Ptr<NCVMatrixAlloc<Ncv32f>>(new NCVMatrixAlloc<Ncv32f>(*g_pHostMemAllocator, image->width, image->height));
+			ncvAssertReturn(dst->isMemAllocated(), NCV_ALLOCATOR_BAD_ALLOC);
+
+			unsigned char *row = reinterpret_cast<unsigned char*> (image->imageData);
+			T convert;
+			for (int i = 0; i < image->height; ++i)
+			{
+				for (int j = 0; j < image->width; ++j)
+				{
+					if (image->nChannels < 3)
+					{
+						dst->ptr()[j + i*dst->stride()] = static_cast<float> (*(row + j*image->nChannels)) / 255.0f;
+					}
+					else
+					{
+						unsigned char *color = row + j * image->nChannels;
+						dst->ptr()[j + i*dst->stride()] = convert(color[0], color[1], color[2]);
+					}
+				}
+				row += image->widthStep;
+			}
+			return NCV_SUCCESS;
+		}
+
+		template<typename T>
+		inline T Clamp(T x, T a, T b)
+		{
+			return ((x) > (a) ? ((x) < (b) ? (x) : (b)) : (a));
+		}
+
+		template<typename T>
+		inline T MapValue(T x, T a, T b, T c, T d)
+		{
+			x = Clamp(x, a, b);
+			return c + (d - c) * (x - a) / (b - a);
+		}
+
+		static NCVStatus ShowFlow(NCVMatrixAlloc<Ncv32f> &u, NCVMatrixAlloc<Ncv32f> &v, const char *name)
+		{
+			IplImage *flowField;
+
+			NCVMatrixAlloc<Ncv32f> host_u(*g_pHostMemAllocator, u.width(), u.height());
+			ncvAssertReturn(host_u.isMemAllocated(), NCV_ALLOCATOR_BAD_ALLOC);
+
+			NCVMatrixAlloc<Ncv32f> host_v(*g_pHostMemAllocator, u.width(), u.height());
+			ncvAssertReturn(host_v.isMemAllocated(), NCV_ALLOCATOR_BAD_ALLOC);
+
+			ncvAssertReturnNcvStat(u.copySolid(host_u, 0));
+			ncvAssertReturnNcvStat(v.copySolid(host_v, 0));
+
+			float *ptr_u = host_u.ptr();
+			float *ptr_v = host_v.ptr();
+
+			float maxDisplacement = 1.0f;
+
+			for (Ncv32u i = 0; i < u.height(); ++i)
+			{
+				for (Ncv32u j = 0; j < u.width(); ++j)
+				{
+					float d = std::max(fabsf(*ptr_u), fabsf(*ptr_v));
+					if (d > maxDisplacement) maxDisplacement = d;
+					++ptr_u;
+					++ptr_v;
+				}
+				ptr_u += u.stride() - u.width();
+				ptr_v += v.stride() - v.width();
+			}
+
+			CvSize image_size = cvSize(u.width(), u.height());
+			flowField = cvCreateImage(image_size, IPL_DEPTH_8U, 4);
+			if (flowField == 0) return NCV_NULL_PTR;
+
+			unsigned char *row = reinterpret_cast<unsigned char *> (flowField->imageData);
+
+			ptr_u = host_u.ptr();
+			ptr_v = host_v.ptr();
+			for (int i = 0; i < flowField->height; ++i)
+			{
+				for (int j = 0; j < flowField->width; ++j)
+				{
+					(row + j * flowField->nChannels)[0] = 0;
+					(row + j * flowField->nChannels)[1] = static_cast<unsigned char> (MapValue(-(*ptr_v), -maxDisplacement, maxDisplacement, 0.0f, 255.0f));
+					(row + j * flowField->nChannels)[2] = static_cast<unsigned char> (MapValue(*ptr_u, -maxDisplacement, maxDisplacement, 0.0f, 255.0f));
+					(row + j * flowField->nChannels)[3] = 255;
+					++ptr_u;
+					++ptr_v;
+				}
+				row += flowField->widthStep;
+				ptr_u += u.stride() - u.width();
+				ptr_v += v.stride() - v.width();
+			}
+
+			cvShowImage(name, flowField);
+
+			return NCV_SUCCESS;
+		}
+
+		static IplImage *CreateImage(NCVMatrixAlloc<Ncv32f> &h_r, NCVMatrixAlloc<Ncv32f> &h_g, NCVMatrixAlloc<Ncv32f> &h_b)
+		{
+			CvSize imageSize = cvSize(h_r.width(), h_r.height());
+			IplImage *image = cvCreateImage(imageSize, IPL_DEPTH_8U, 4);
+			if (image == 0) return 0;
+
+			unsigned char *row = reinterpret_cast<unsigned char*> (image->imageData);
+
+			for (int i = 0; i < image->height; ++i)
+			{
+				for (int j = 0; j < image->width; ++j)
+				{
+					int offset = j * image->nChannels;
+					int pos = i * h_r.stride() + j;
+					row[offset + 0] = static_cast<unsigned char> (h_b.ptr()[pos] * 255.0f);
+					row[offset + 1] = static_cast<unsigned char> (h_g.ptr()[pos] * 255.0f);
+					row[offset + 2] = static_cast<unsigned char> (h_r.ptr()[pos] * 255.0f);
+					row[offset + 3] = 255;
+				}
+				row += image->widthStep;
+			}
+			return image;
+		}
+
+		class RgbToMonochrome
+		{
+		public:
+			float operator ()(unsigned char b, unsigned char g, unsigned char r)
+			{
+				float _r = static_cast<float>(r) / 255.0f;
+				float _g = static_cast<float>(g) / 255.0f;
+				float _b = static_cast<float>(b) / 255.0f;
+				return (_r + _g + _b) / 3.0f;
+			}
+		};
+
+		class RgbToR
+		{
+		public:
+			float operator ()(unsigned char /*b*/, unsigned char /*g*/, unsigned char r)
+			{
+				return static_cast<float>(r) / 255.0f;
+			}
+		};
+
+
+		class RgbToG
+		{
+		public:
+			float operator ()(unsigned char /*b*/, unsigned char g, unsigned char /*r*/)
+			{
+				return static_cast<float>(g) / 255.0f;
+			}
+		};
+
+		class RgbToB
+		{
+		public:
+			float operator ()(unsigned char b, unsigned char /*g*/, unsigned char /*r*/)
+			{
+				return static_cast<float>(b) / 255.0f;
+			}
+		};
+
+		static NCVStatus LoadImages(const cv::Mat& frame_0, const cv::Mat& frame_1,
+			int& width,
+			int& height,
+			cv::Ptr<NCVMatrixAlloc<Ncv32f>>& src,
+			cv::Ptr<NCVMatrixAlloc<Ncv32f>>& dst,
+			IplImage *&firstFrame,
+			IplImage *&lastFrame)
+		{
+			IplImage* image_0 = new IplImage(frame_0);
+			if (image_0 == 0)
+			{
+				std::cout << "Could not open frame 0 '\n";
+				return NCV_FILE_ERROR;
+			}
+			firstFrame = image_0;
+			ncvAssertReturnNcvStat(CopyData<RgbToMonochrome>(image_0, src));
+
+			IplImage* image_1 = new IplImage(frame_1);
+			if (image_1 == 0)
+			{
+				std::cout << "Could not open frame 1 '\n";
+				return NCV_FILE_ERROR;
+			}
+			lastFrame = image_1;
+			ncvAssertReturnNcvStat(CopyData<RgbToMonochrome>(image_1, dst));
+
+			width = image_0->width;
+			height = image_0->height;
+
+			return NCV_SUCCESS;
+		}
+
+		int TopViewSpace::detect_skeletons()
 		{
 			// Invalidate all skeletons
 			std::for_each(this->skeletons.begin(), this->skeletons.end(), [](topviewkinect::skeleton::Skeleton& skeleton) { skeleton.set_updated(false); });
@@ -1377,7 +2005,8 @@ namespace topviewkinect
 			// Contour Segmentation
 			cv::Mat depth_contours_mask;
 			cv::threshold(depth_laplacian_filter, depth_contours_mask, 0, 255, CV_THRESH_BINARY | CV_THRESH_OTSU);
-			cv::imshow("Laplacian filter BINARY", depth_contours_mask);
+
+			//cv::imshow("Laplacian filter BINARY", depth_contours_mask);
 
 			// Vertical kernel
 			//cv::Mat vertical_k = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(1, 1));
@@ -1431,18 +2060,6 @@ namespace topviewkinect
 				//cv::Mat optical = this->depth_foreground_frame.clone();
 				//depth_laplaced.copyTo(next);
 				//cv::calcOpticalFlowFarneback(depth_prev, next, uflow, 0.5, 3, 15, 3, 5, 1.2, 0);
-
-				//uflow.copyTo(flow);
-				//for (int y = 0; y < optical.rows; y += 32)
-				//{
-				//	for (int x = 0; x < optical.cols; x += 32)
-				//	{
-				//		const cv::Point2f& fxy = flow.at<cv::Point2f>(y, x);
-				//		cv::line(optical, cv::Point(x, y), cv::Point(cvRound(x + fxy.x), cvRound(y + fxy.y)), 255, 3);
-				//		cv::circle(optical, cv::Point(x, y), 2, 255, -1);
-				//	}
-				//}
-
 				//cv::Mat depth_optical_viz = this->depth_foreground_frame.clone();
 				//compute_optical_flow(depth_prev, depth_laplaced, depth_optical_viz, "Brox Optical Flow - Depth");
 				//cv::imshow("dense optical depth", depth_optical_viz);
@@ -1451,7 +2068,261 @@ namespace topviewkinect
 				cv::cvtColor(this->infrared_frame, infrared_optical_viz, CV_GRAY2BGR);
 
 				compute_optical_flow(infrared_prev, this->infrared_frame.clone(), infrared_optical_viz, "Brox Optical Flow - Infrared");
-				cv::imshow("dense optical infrared", infrared_optical_viz);
+				cv::imshow("Brox Optical Flow (infrared)", infrared_optical_viz);
+
+				// Liu Optflow
+				{
+					// get the parameters
+					//double alpha= 1;
+					//double ratio=0.5;
+					//int minWidth= 40;
+					//int nOuterFPIterations = 3;
+					//int nInnerFPIterations = 1;
+					//int nSORIterations= 20;
+					//
+					//DImage Im1, Im2;
+					//Im1.imread_opencv_gray(infrared_prev);
+					//Im2.imread_opencv_gray(this->infrared_frame);
+					//
+					//DImage vx,vy,warpI2;
+
+					//const int64 liu_start_sec = cv::getTickCount();
+					//
+					//OpticalFlow::Coarse2FineFlow(vx,vy,warpI2,Im1,Im2,alpha,ratio,minWidth,nOuterFPIterations,nInnerFPIterations,nSORIterations);
+
+					//const double liu_duration_sec = (cv::getTickCount() - liu_start_sec) / cv::getTickFrequency();
+					//std::cout << "liu_optflow time: " << liu_duration_sec * 1000 << " ms" << " " << liu_duration_sec << " s" << std::endl;
+				}
+
+				// NVIDIA GPU OPTICAL FLOW
+				{
+					//Ncv32f timeStep = 0.25f;
+					NCVBroxOpticalFlowDescriptor desc;
+					desc.alpha = 0.197f;
+					desc.gamma = 50.0f;
+					desc.scale_factor = 0.8f;
+					desc.number_of_inner_iterations = 5;
+					desc.number_of_outer_iterations = 77;
+					desc.number_of_solver_iterations = 10;
+
+					int width, height;
+					cv::Ptr<NCVMatrixAlloc<Ncv32f>> src_host;
+					cv::Ptr<NCVMatrixAlloc<Ncv32f>> dst_host;
+					IplImage *firstFrame, *lastFrame;
+
+					// NV timer
+					std::chrono::time_point<std::chrono::high_resolution_clock> nv_start = std::chrono::high_resolution_clock::now();
+					const int64 nv_start_sec = cv::getTickCount();
+
+					ncvAssertReturnNcvStat(LoadImages(infrared_prev, this->infrared_frame, width, height, src_host, dst_host, firstFrame, lastFrame));
+
+					cv::Ptr<NCVMatrixAlloc<Ncv32f>> src(new NCVMatrixAlloc<Ncv32f>(*g_pGPUMemAllocator, src_host->width(), src_host->height()));
+					ncvAssertReturn(src->isMemAllocated(), -1);
+
+					cv::Ptr<NCVMatrixAlloc<Ncv32f>> dst(new NCVMatrixAlloc<Ncv32f>(*g_pGPUMemAllocator, src_host->width(), src_host->height()));
+					ncvAssertReturn(dst->isMemAllocated(), -1);
+
+					ncvAssertReturnNcvStat(src_host->copySolid(*src, 0));
+					ncvAssertReturnNcvStat(dst_host->copySolid(*dst, 0));
+
+					double duration = (cv::getTickCount() - nv_start_sec) / cv::getTickFrequency();
+					std::cout << "nv_brox_optflow load images : " << duration << " sec" << std::endl;
+
+#if defined SAFE_MAT_DECL
+#undef SAFE_MAT_DECL
+#endif
+#define SAFE_MAT_DECL(name, allocator, sx, sy) \
+				NCVMatrixAlloc<Ncv32f> name(*allocator, sx, sy);\
+				ncvAssertReturn(name.isMemAllocated(), -1);
+
+					SAFE_MAT_DECL(u, g_pGPUMemAllocator, width, height);
+					SAFE_MAT_DECL(v, g_pGPUMemAllocator, width, height);
+
+					SAFE_MAT_DECL(uBck, g_pGPUMemAllocator, width, height);
+					SAFE_MAT_DECL(vBck, g_pGPUMemAllocator, width, height);
+
+					SAFE_MAT_DECL(h_r, g_pHostMemAllocator, width, height);
+					SAFE_MAT_DECL(h_g, g_pHostMemAllocator, width, height);
+					SAFE_MAT_DECL(h_b, g_pHostMemAllocator, width, height);
+
+					duration = (cv::getTickCount() - nv_start_sec) / cv::getTickFrequency();
+					std::cout << "nv_brox_optflow forward backward before : " << duration << " sec" << std::endl;
+
+					//std::cout << "Estimating optical flow\nForward...\n";
+					if (NCV_SUCCESS != NCVBroxOpticalFlow(desc, *g_pGPUMemAllocator, *src, *dst, u, v, 0))
+					{
+						std::cout << "Failed\n";
+						return -1;
+					}
+
+					//std::cout << "Backward...\n";
+					if (NCV_SUCCESS != NCVBroxOpticalFlow(desc, *g_pGPUMemAllocator, *dst, *src, uBck, vBck, 0))
+					{
+						std::cout << "Failed\n";
+						return -1;
+					}
+
+					duration = (cv::getTickCount() - nv_start_sec) / cv::getTickFrequency();
+					std::cout << "nv_brox_optflow forward backward : " << duration << " sec" << std::endl;
+
+					// matrix for temporary data
+					SAFE_MAT_DECL(d_temp, g_pGPUMemAllocator, width, height);
+
+					// first frame color components (GPU memory)
+					SAFE_MAT_DECL(d_r, g_pGPUMemAllocator, width, height);
+					SAFE_MAT_DECL(d_g, g_pGPUMemAllocator, width, height);
+					SAFE_MAT_DECL(d_b, g_pGPUMemAllocator, width, height);
+
+					// second frame color components (GPU memory)
+					SAFE_MAT_DECL(d_rt, g_pGPUMemAllocator, width, height);
+					SAFE_MAT_DECL(d_gt, g_pGPUMemAllocator, width, height);
+					SAFE_MAT_DECL(d_bt, g_pGPUMemAllocator, width, height);
+
+					// intermediate frame color components (GPU memory)
+					SAFE_MAT_DECL(d_rNew, g_pGPUMemAllocator, width, height);
+					SAFE_MAT_DECL(d_gNew, g_pGPUMemAllocator, width, height);
+					SAFE_MAT_DECL(d_bNew, g_pGPUMemAllocator, width, height);
+
+					// interpolated forward flow
+					SAFE_MAT_DECL(ui, g_pGPUMemAllocator, width, height);
+					SAFE_MAT_DECL(vi, g_pGPUMemAllocator, width, height);
+
+					// interpolated backward flow
+					SAFE_MAT_DECL(ubi, g_pGPUMemAllocator, width, height);
+					SAFE_MAT_DECL(vbi, g_pGPUMemAllocator, width, height);
+
+					// occlusion masks
+					SAFE_MAT_DECL(occ0, g_pGPUMemAllocator, width, height);
+					SAFE_MAT_DECL(occ1, g_pGPUMemAllocator, width, height);
+
+					// prepare color components on host and copy them to device memory
+					ncvAssertReturnNcvStat(CopyData<RgbToR>(firstFrame, h_r));
+					ncvAssertReturnNcvStat(CopyData<RgbToG>(firstFrame, h_g));
+					ncvAssertReturnNcvStat(CopyData<RgbToB>(firstFrame, h_b));
+
+					ncvAssertReturnNcvStat(h_r.copySolid(d_r, 0));
+					ncvAssertReturnNcvStat(h_g.copySolid(d_g, 0));
+					ncvAssertReturnNcvStat(h_b.copySolid(d_b, 0));
+
+					ncvAssertReturnNcvStat(CopyData<RgbToR>(lastFrame, h_r));
+					ncvAssertReturnNcvStat(CopyData<RgbToG>(lastFrame, h_g));
+					ncvAssertReturnNcvStat(CopyData<RgbToB>(lastFrame, h_b));
+
+					ncvAssertReturnNcvStat(h_r.copySolid(d_rt, 0));
+					ncvAssertReturnNcvStat(h_g.copySolid(d_gt, 0));
+					ncvAssertReturnNcvStat(h_b.copySolid(d_bt, 0));
+
+					duration = (cv::getTickCount() - nv_start_sec) / cv::getTickFrequency();
+					std::cout << "nv_brox_optflow done: " << duration << " sec" << std::endl;
+
+					auto nv_duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - nv_start);
+					std::cout << "nv_optflow time: " << nv_duration.count() << " msec" << std::endl;
+					const double nv_time_sec = (cv::getTickCount() - nv_start_sec) / cv::getTickFrequency();
+					std::cout << "nv_brox_optflow time : " << nv_time_sec << " sec" << std::endl;
+
+					ShowFlow(u, v, "Forward flow");
+					ShowFlow(uBck, vBck, "Backward flow");
+				}
+
+
+				//std::cout << "Interpolating...\n";
+				//std::cout.precision(4);
+
+				//std::vector<IplImage*> frames;
+				//frames.push_back(firstFrame);
+
+				// compute interpolated frames
+				//for (Ncv32f timePos = timeStep; timePos < 1.0f; timePos += timeStep)
+				//{
+				//	ncvAssertCUDAReturn(cudaMemset(ui.ptr(), 0, ui.pitch() * ui.height()), NCV_CUDA_ERROR);
+				//	ncvAssertCUDAReturn(cudaMemset(vi.ptr(), 0, vi.pitch() * vi.height()), NCV_CUDA_ERROR);
+
+				//	ncvAssertCUDAReturn(cudaMemset(ubi.ptr(), 0, ubi.pitch() * ubi.height()), NCV_CUDA_ERROR);
+				//	ncvAssertCUDAReturn(cudaMemset(vbi.ptr(), 0, vbi.pitch() * vbi.height()), NCV_CUDA_ERROR);
+
+				//	ncvAssertCUDAReturn(cudaMemset(occ0.ptr(), 0, occ0.pitch() * occ0.height()), NCV_CUDA_ERROR);
+				//	ncvAssertCUDAReturn(cudaMemset(occ1.ptr(), 0, occ1.pitch() * occ1.height()), NCV_CUDA_ERROR);
+
+				//	NppStInterpolationState state;
+				//	// interpolation state should be filled once except pSrcFrame0, pSrcFrame1, and pNewFrame
+				//	// we will only need to reset buffers content to 0 since interpolator doesn't do this itself
+				//	state.size = NcvSize32u(width, height);
+				//	state.nStep = d_r.pitch();
+				//	state.pSrcFrame0 = d_r.ptr();
+				//	state.pSrcFrame1 = d_rt.ptr();
+				//	state.pFU = u.ptr();
+				//	state.pFV = v.ptr();
+				//	state.pBU = uBck.ptr();
+				//	state.pBV = vBck.ptr();
+				//	state.pos = timePos;
+				//	state.pNewFrame = d_rNew.ptr();
+				//	state.ppBuffers[0] = occ0.ptr();
+				//	state.ppBuffers[1] = occ1.ptr();
+				//	state.ppBuffers[2] = ui.ptr();
+				//	state.ppBuffers[3] = vi.ptr();
+				//	state.ppBuffers[4] = ubi.ptr();
+				//	state.ppBuffers[5] = vbi.ptr();
+
+				//	// interpolate red channel
+				//	nppiStInterpolateFrames(&state);
+
+				//	// reset buffers
+				//	ncvAssertCUDAReturn(cudaMemset(ui.ptr(), 0, ui.pitch() * ui.height()), NCV_CUDA_ERROR);
+				//	ncvAssertCUDAReturn(cudaMemset(vi.ptr(), 0, vi.pitch() * vi.height()), NCV_CUDA_ERROR);
+
+				//	ncvAssertCUDAReturn(cudaMemset(ubi.ptr(), 0, ubi.pitch() * ubi.height()), NCV_CUDA_ERROR);
+				//	ncvAssertCUDAReturn(cudaMemset(vbi.ptr(), 0, vbi.pitch() * vbi.height()), NCV_CUDA_ERROR);
+
+				//	ncvAssertCUDAReturn(cudaMemset(occ0.ptr(), 0, occ0.pitch() * occ0.height()), NCV_CUDA_ERROR);
+				//	ncvAssertCUDAReturn(cudaMemset(occ1.ptr(), 0, occ1.pitch() * occ1.height()), NCV_CUDA_ERROR);
+
+				//	// interpolate green channel
+				//	state.pSrcFrame0 = d_g.ptr();
+				//	state.pSrcFrame1 = d_gt.ptr();
+				//	state.pNewFrame = d_gNew.ptr();
+
+				//	nppiStInterpolateFrames(&state);
+
+				//	// reset buffers
+				//	ncvAssertCUDAReturn(cudaMemset(ui.ptr(), 0, ui.pitch() * ui.height()), NCV_CUDA_ERROR);
+				//	ncvAssertCUDAReturn(cudaMemset(vi.ptr(), 0, vi.pitch() * vi.height()), NCV_CUDA_ERROR);
+
+				//	ncvAssertCUDAReturn(cudaMemset(ubi.ptr(), 0, ubi.pitch() * ubi.height()), NCV_CUDA_ERROR);
+				//	ncvAssertCUDAReturn(cudaMemset(vbi.ptr(), 0, vbi.pitch() * vbi.height()), NCV_CUDA_ERROR);
+
+				//	ncvAssertCUDAReturn(cudaMemset(occ0.ptr(), 0, occ0.pitch() * occ0.height()), NCV_CUDA_ERROR);
+				//	ncvAssertCUDAReturn(cudaMemset(occ1.ptr(), 0, occ1.pitch() * occ1.height()), NCV_CUDA_ERROR);
+
+				//	// interpolate blue channel
+				//	state.pSrcFrame0 = d_b.ptr();
+				//	state.pSrcFrame1 = d_bt.ptr();
+				//	state.pNewFrame = d_bNew.ptr();
+
+				//	nppiStInterpolateFrames(&state);
+
+				//	// copy to host memory
+				//	ncvAssertReturnNcvStat(d_rNew.copySolid(h_r, 0));
+				//	ncvAssertReturnNcvStat(d_gNew.copySolid(h_g, 0));
+				//	ncvAssertReturnNcvStat(d_bNew.copySolid(h_b, 0));
+
+				//	// convert to IplImage
+				//	IplImage *newFrame = CreateImage(h_r, h_g, h_b);
+				//	if (newFrame == 0)
+				//	{
+				//		std::cout << "Could not create new frame in host memory\n";
+				//		break;
+				//	}
+				//	frames.push_back(newFrame);
+				//	//std::cout << timePos * 100.0f << "%\r";
+				//}
+				////std::cout << std::setw(5) << "100%\n";
+
+				//frames.push_back(lastFrame);
+
+				//Ncv32u currentFrame;
+				//currentFrame = 0;
+				//cvShowImage("Interpolated frame", frames[0]);
+				//cvShowImage("Interpolated frame 2", frames[1]);
 
 				//cv::Mat flow_split[2];
 				//cv::Mat magnitude, angle;
@@ -1512,7 +2383,7 @@ namespace topviewkinect
 
 			cv::Mat new_d = this->depth_foreground_frame.clone();
 			new_d.setTo(topviewkinect::color::CV_BLACK, depth_contours_mask);
-			cv::imshow("new d", new_d);
+			//cv::imshow("new d", new_d);
 
 			cv::Mat depth_skeletons_all = this->depth_foreground_frame.clone();
 			depth_skeletons_all.setTo(0);
@@ -1535,7 +2406,7 @@ namespace topviewkinect
 					//cv::drawContours(depth_skeletons, depth_skeletons_contours, i, topviewkinect::color::CV_WHITE, 2);
 				}
 			}
-			cv::imshow("depth skeletons all", depth_skeletons_all);
+			//cv::imshow("depth skeletons all", depth_skeletons_all);
 
 			//cv::Mat depth_contour_clean = this->depth_foreground_frame.clone();
 			//std::vector<std::vector<cv::Point>> c2;
@@ -1743,7 +2614,7 @@ namespace topviewkinect
 
 				// Infrared map
 				cv::Mat skeleton_infrared_frame = cv::Mat::zeros(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE, CV_8UC1);
-				this->low_infrared_frame.copyTo(skeleton_infrared_frame, skeleton_occupancy_mask);
+				this->infrared_low_frame.copyTo(skeleton_infrared_frame, skeleton_occupancy_mask);
 
 				// Depth silhouette
 				cv::Rect skeleton_bounding_rect = cv::boundingRect(skeleton_contour);
@@ -2038,6 +2909,8 @@ namespace topviewkinect
 				//cv::imshow("head", skeleton_head_orientation_frame);
 				//cv::imwrite("E:\\eaglesense\\data\\topviewkinect\\2010\\depth\\paper\\figs\\new\\_head.png", skeleton_head_orientation_frame);
 			}
+
+			return true;
 		}
 
 		void TopViewSpace::combine_openpose_and_depth()
@@ -2524,7 +3397,7 @@ namespace topviewkinect
 
 		cv::Mat TopViewSpace::get_low_infrared_frame() const
 		{
-			return this->low_infrared_frame.clone();
+			return this->infrared_low_frame.clone();
 		}
 
 		cv::Mat TopViewSpace::get_rgb_frame() const
@@ -2540,6 +3413,11 @@ namespace topviewkinect
 		cv::Mat TopViewSpace::get_android_sensor_frame() const
 		{
 			return this->android_sensor_frame.clone();
+		}
+
+		cv::Mat TopViewSpace::get_crossmotion_calibration_frame() const
+		{
+			return this->crossmotion_calibration_frame.clone();
 		}
 	}
 }

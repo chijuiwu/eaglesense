@@ -154,33 +154,32 @@ namespace topviewkinect
 
 				while (android_sensor_data_csv.good())
 				{
-					std::string entry;
-					std::getline(android_sensor_data_csv, entry);
-					if (entry.empty())
+					std::string entry_str;
+					std::getline(android_sensor_data_csv, entry_str);
+					if (entry_str.empty())
 					{
 						break;
 					}
 
-					std::vector<std::string> entry_delimited;
-					std::stringstream ss(entry);
+					std::stringstream ss(entry_str);
+					std::vector<std::string> entry;
 					while (ss)
 					{
 						std::string substr;
 						std::getline(ss, substr, ',');
-						entry_delimited.push_back(substr);
+						entry.push_back(substr);
 					}
 
-					int frame_id = stoi(entry_delimited[0]);
+					int frame_id = stoi(entry[0]);
 					std::map<int, std::vector<topviewkinect::AndroidSensorData>>::iterator sensor_data_it = this->android_sensor_data.find(frame_id);
 					if (sensor_data_it == this->android_sensor_data.end())
 					{
 						this->android_sensor_data[frame_id] = {};
 					}
 
-					topviewkinect::AndroidSensorData data_entry{ static_cast<float>(std::stod(entry_delimited[3])), static_cast<float>(std::stod(entry_delimited[4])), static_cast<float>(std::stod(entry_delimited[5])), static_cast<float>(std::stod(entry_delimited[6])), static_cast<float>(std::stod(entry_delimited[7])), static_cast<float>(std::stod(entry_delimited[8])), static_cast<float>(std::stod(entry_delimited[9])), static_cast<float>(std::stod(entry_delimited[10])), static_cast<float>(std::stod(entry_delimited[11])), static_cast<float>(std::stod(entry_delimited[12])), static_cast<float>(std::stod(entry_delimited[13])), static_cast<float>(std::stod(entry_delimited[14])), static_cast<float>(std::stod(entry_delimited[15])), static_cast<float>(std::stod(entry_delimited[16])), static_cast<float>(std::stod(entry_delimited[17])) };
-					this->android_sensor_data[frame_id].push_back(data_entry);
+					topviewkinect::AndroidSensorData data{ entry[2], stod(entry[3]), std::stof(entry[4]), std::stof(entry[5]), std::stof(entry[6]), std::stof(entry[7]), std::stof(entry[8]), std::stof(entry[9]), std::stof(entry[10]), std::stof(entry[11]), std::stof(entry[12]), std::stof(entry[13]), std::stof(entry[14]), std::stof(entry[15]), std::stof(entry[16]), std::stof(entry[17]), std::stof(entry[18]), std::stof(entry[19]), std::stof(entry[20]), std::stof(entry[21]) };
+					this->android_sensor_data[frame_id].push_back(data);
 				}
-				std::cout << "test: " << this->android_sensor_data[2038][0].to_str() << std::endl;
 			}
 
 			// Postprocessing data
@@ -251,7 +250,7 @@ namespace topviewkinect
 			this->timeseries_csv << "frame_id,depth_time,infrared_time,rgb_time" << "\n";
 
 			this->android_sensor_data_csv = std::ofstream(this->dataset_directory + "/android_sensor_data.csv");
-			this->android_sensor_data_csv << "frame_id,depth_time,addr,accel_x,accel_y,accel_z,gyro_x,gyro_y,gyro_z,orientation_x,orientation_y,orientation_z,linear_accel_x,linear_accel_y,linear_accel_z,rotation_vec_x,rotation_vec_y,rotation_vec_z" << "\n";
+			this->android_sensor_data_csv << "frame_id,depth_time,addr,time,accel_x,accel_y,accel_z,gyro_x,gyro_y,gyro_z,orientation_x,orientation_y,orientation_z,linear_accel_x,linear_accel_y,linear_accel_z,gravity_x,gravity_y,gravity_z,rotation_x,rotation_y,rotation_z,label" << "\n";
 
 			return true;
 		}
@@ -283,9 +282,14 @@ namespace topviewkinect
 			++this->dataset_size;
 		}
 
-		void InteractionLog::save_android_sensor_data(signed long long kinect_timestamp, topviewkinect::AndroidSensorData data)
+		void InteractionLog::save_android_sensor_data(signed long long kinect_timestamp, std::deque<topviewkinect::AndroidSensorData> data_history, int android_sensor_label)
 		{
-			this->android_sensor_data_csv << this->dataset_size << "," << kinect_timestamp << "," << "0.0.0.0" << "," << data.accel_x << "," << data.accel_y << "," << data.accel_z << "," << data.gyro_x << "," << data.gyro_y << "," << data.gyro_z << "," << data.orientation_x << "," << data.orientation_y << "," << data.orientation_z << "," << data.linear_accel_x << "," << data.linear_accel_y << "," << data.linear_accel_z << "," << data.rotation_vec_x << "," << data.rotation_vec_y << "," << data.rotation_vec_z << "\n";
+			for (int i = 0; i < data_history.size(); ++i)
+			{
+				const topviewkinect::AndroidSensorData data = data_history[i];
+				
+				this->android_sensor_data_csv << this->dataset_size << "," << kinect_timestamp << "," << data.addr << "," << data.arrival_time << "," << std::fixed << std::setprecision(5) << data.accel_x << "," << data.accel_y << "," << data.accel_z << "," << data.gyro_x << "," << data.gyro_y << "," << data.gyro_z << "," << data.orientation_x << "," << data.orientation_y << "," << data.orientation_z << "," << data.linear_accel_x << "," << data.linear_accel_y << "," << data.linear_accel_z << "," << data.gravity_x << "," << data.gravity_y << "," << data.gravity_z << "," << data.rotation_x << "," << data.rotation_y << "," << data.rotation_z << "," << android_sensor_label << "\n";
+			}
 		}
 
 		void InteractionLog::save_visualization(const int frame_id, const cv::Mat& visualization_frame)
@@ -293,6 +297,19 @@ namespace topviewkinect
 			std::ostringstream visualization_image_ss;
 			visualization_image_ss << get_visualization_directory(this->dataset_directory) << "/" << frame_id << ".jpeg";
 			cv::imwrite(visualization_image_ss.str(), visualization_frame);
+		}
+
+		void InteractionLog::save_calibration(const std::vector<cv::Point>& calibration_points_2d, const std::vector<CameraSpacePoint>& calibration_points_3d)
+		{
+			std::ofstream crossmotion_calibration_csv = std::ofstream(this->dataset_directory + "/crossmotion_calibration.csv");
+			crossmotion_calibration_csv << "acccelrometer_x,acccelrometer_y,acccelrometer_z,infrared_x,infrared_y,camera_x,camera_y,camera_z" << "\n";
+			for (int i = 0; i < calibration_points_3d.size(); ++i)
+			{
+				cv::Point infrared_2d = calibration_points_2d[i];
+				CameraSpacePoint csp = calibration_points_3d[i];
+				crossmotion_calibration_csv << "-0.696,6.625,-7.255," << infrared_2d.x << "," << infrared_2d.y << "," << csp.X << "," << csp.Y << "," << csp.Z << "\n";
+			}
+			crossmotion_calibration_csv.close();
 		}
 
 		// Postprocess

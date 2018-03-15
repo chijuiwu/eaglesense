@@ -19,6 +19,16 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\thirdparty\liu_optflow\GaussianPyramid.h" />
+    <ClInclude Include="include\thirdparty\liu_optflow\Image.h" />
+    <ClInclude Include="include\thirdparty\liu_optflow\ImageIO.h" />
+    <ClInclude Include="include\thirdparty\liu_optflow\ImageProcessing.h" />
+    <ClInclude Include="include\thirdparty\liu_optflow\Matrix.h" />
+    <ClInclude Include="include\thirdparty\liu_optflow\NoiseModel.h" />
+    <ClInclude Include="include\thirdparty\liu_optflow\OpticalFlow.h" />
+    <ClInclude Include="include\thirdparty\liu_optflow\project.h" />
+    <ClInclude Include="include\thirdparty\liu_optflow\Stochastic.h" />
+    <ClInclude Include="include\thirdparty\liu_optflow\Vector.h" />
     <ClInclude Include="include\thirdparty\mpi\colorcode.h" />
     <ClInclude Include="include\thirdparty\mpi\Convert.h" />
     <ClInclude Include="include\thirdparty\mpi\Convolve.h" />
@@ -45,6 +55,10 @@
     <ClInclude Include="include\topviewkinect\vision\space.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="include\thirdparty\liu_optflow\Coarse2FineTwoFrames.cpp" />
+    <ClCompile Include="include\thirdparty\liu_optflow\GaussianPyramid.cpp" />
+    <ClCompile Include="include\thirdparty\liu_optflow\OpticalFlow.cpp" />
+    <ClCompile Include="include\thirdparty\liu_optflow\Stochastic.cpp" />
     <ClCompile Include="include\thirdparty\mpi\colorcode.cpp" />
     <ClCompile Include="include\thirdparty\mpi\colortest.cpp" />
     <ClCompile Include="include\thirdparty\mpi\color_flow.cpp" />
@@ -200,7 +214,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(CUDA_PATH_V8_0)\lib\x64\;D:\libs\darknet-win\darknet\build\darknet\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>gflags.lib;cudnn.lib;OpenPose.lib;yolo_cpp_dll.lib;Ws2_32.lib;wsock32.lib;opencv_world340.lib;kinect20.lib;python36.lib;_tkinter.lib;npymath.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>gflags.lib;cudnn.lib;cudart.lib;OpenPose.lib;yolo_cpp_dll.lib;Ws2_32.lib;wsock32.lib;opencv_world340.lib;kinect20.lib;python36.lib;_tkinter.lib;npymath.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

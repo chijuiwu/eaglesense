@@ -15,6 +15,8 @@ You should have received a copy of the GNU General Public License along with thi
 
 #include <opencv2/core.hpp>
 
+#include <Kinect.h>
+
 #include <vector>
 #include <fstream>
 
@@ -25,18 +27,22 @@ namespace topviewkinect
 
 	struct AndroidSensorData
 	{
-		std::string sender_addr;
+		std::string addr;
+		double arrival_time;
 		float accel_x, accel_y, accel_z;
 		float gyro_x, gyro_y, gyro_z;
 		float orientation_x, orientation_y, orientation_z;
 		float linear_accel_x, linear_accel_y, linear_accel_z;
-		float rotation_vec_x, rotation_vec_y, rotation_vec_z;
+		float gravity_x, gravity_y, gravity_z;
+		float rotation_x, rotation_y, rotation_z;
 
 		AndroidSensorData()
 		{
 		}
 
-		AndroidSensorData(float accel_x_, float accel_y_, float accel_z_, float gyro_x_, float gyro_y_, float gyro_z_, float orientation_x_, float orientation_y_, float orientation_z_, float linear_accel_x_, float linear_accel_y_, float linear_accel_z_, float rotation_vec_x_, float rotation_vec_y_, float rotation_vec_z_) :
+		AndroidSensorData(std::string addr_, double arrival_time_, float accel_x_, float accel_y_, float accel_z_, float gyro_x_, float gyro_y_, float gyro_z_, float orientation_x_, float orientation_y_, float orientation_z_, float linear_accel_x_, float linear_accel_y_, float linear_accel_z_, float gravity_x, float gravity_y, float gravity_z, float rotation_x, float rotation_y, float rotation_z) :
+			addr(addr_),
+			arrival_time(arrival_time_),
 			accel_x{ accel_x_ },
 			accel_y{ accel_y_ },
 			accel_z{ accel_z_ },
@@ -49,9 +55,12 @@ namespace topviewkinect
 			linear_accel_x{ linear_accel_x_ },
 			linear_accel_y{ linear_accel_y_ },
 			linear_accel_z{ linear_accel_z_ },
-			rotation_vec_x{ rotation_vec_x_ },
-			rotation_vec_y{ rotation_vec_y_ },
-			rotation_vec_z{ rotation_vec_z_ }
+			gravity_x{ gravity_x },
+			gravity_y{ gravity_y },
+			gravity_z{ gravity_z },
+			rotation_x{ rotation_x },
+			rotation_y{ rotation_y },
+			rotation_z{ rotation_z }
 		{
 		}
 
@@ -59,12 +68,13 @@ namespace topviewkinect
 		{
 			std::stringstream ss;
 			ss << "Android Sensor {" << "\n";
-			ss << "		sender addr: " << sender_addr << "\n";
-			ss << "		accel: " << accel_x << "," << accel_y << "," << accel_z << "\n";
-			ss << "		gyro: " << gyro_x << "," << gyro_y << "," << gyro_z << "\n";
-			ss << "		orientation: " << orientation_x << "," << orientation_y << "," << orientation_z << "\n";
-			ss << "		linear accel: " << linear_accel_x << "," << linear_accel_y << "," << linear_accel_z << "\n";
-			ss << "		rotation vect: " << rotation_vec_x << "," << rotation_vec_y << "," << rotation_vec_z << "\n";
+			ss << "		sender addr : " << addr << "\n";
+			ss << "		accel : " << accel_x << "," << accel_y << "," << accel_z << "\n";
+			ss << "		gyro : " << gyro_x << "," << gyro_y << "," << gyro_z << "\n";
+			ss << "		orientation : " << orientation_x << "," << orientation_y << "," << orientation_z << "\n";
+			ss << "		linear accel : " << linear_accel_x << "," << linear_accel_y << "," << linear_accel_z << "\n";
+			ss << "		gravity : " << gravity_x << "," << gravity_y << "," << gravity_z << "\n";
+			ss << "		rotation vect : " << rotation_x << "," << rotation_y << "," << rotation_z << "\n";
 			ss << "}";
 			return ss.str();
 		}
@@ -128,8 +138,9 @@ namespace topviewkinect
 			// Capture
 			bool create_directories();
 			void save_multisource_frames(signed long long kinect_timestamp, const cv::Mat& depth_frame, signed long long infrared_frame_timestamp = -1, const cv::Mat& infrared_frame = cv::Mat(), const cv::Mat& low_infrared_frame = cv::Mat(), signed long long rgb_frame_timestamp = -1, const cv::Mat& rgb_frame = cv::Mat());
-			void save_android_sensor_data(signed long long kinect_timestamp, topviewkinect::AndroidSensorData data);
+			void save_android_sensor_data(signed long long kinect_timestamp, std::deque<topviewkinect::AndroidSensorData> data, int android_sensor_label);
 			void save_visualization(const int frame_id, const cv::Mat& visualization_frame);
+			void save_calibration(const std::vector<cv::Point>& calibration_points_2d, const std::vector<CameraSpacePoint>& calibration_points_3d);
 
 			// Postprocess
 			void create_postprocessed_files(const bool relabel);

@@ -39,407 +39,612 @@ You should have received a copy of the GNU General Public License along with thi
 #include "topviewkinect/color.h"
 #include "topviewkinect/util.h"
 
-static constexpr const char* DEPTH_WINDOW_NAME = "Top-View Kinect Depth";
-static constexpr const char* INFRARED_WINDOW_NAME = "Top-View Kinect Infrared";
-static constexpr const char* RGB_WINDOW_NAME = "Top-View Kinect RGB";
-static constexpr const char* SPACE_WINDOW_NAME = "Top-View Interactive Space";
-static constexpr const char* SPACE_ENLARGED_WINDOW_NAME = "Top-View Interactive Space (Zoom-in)";
-static constexpr const char* ANDROID_SENSOR_WINDOW_NAME = "Android Sensor Stream";
+static constexpr const char* DEPTH_WIN_NAME = "TopView Kinect - Depth";
+static constexpr const char* INFRARED_WIN_NAME = "TopView Kinect - Infrared";
+static constexpr const char* INFRARED_LOW_WIN_NAME = "TopView Kinect - Infrared (Low)";
+static constexpr const char* RGB_WIN_NAME = "TopView Kinect - RGB";
+static constexpr const char* CALIBRATION_WIN_NAME = "TopView Kinect - Calibration";
+static constexpr const char* ANDROID_SENSOR_WIN_NAME = "Android Sensor Stream";
+static constexpr const char* SPACE_WIN_NAME = "TopView - Interactive Space";
+static constexpr const char* SPACE_ENLARGED_WIN_NAME = "TopView - Interactive Space (Zoom)";
 
 static int start();
 static int replay(const int dataset_id);
 static int capture(const int dataset_id);
 static int postprocess(const int dataset_id, const std::string& dataset_name, const bool keep_label);
 
+// just a hack
 class AndroidSensorServer {
-	public:
-		AndroidSensorServer(boost::asio::io_service& io_service)
-			: _socket(io_service, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), 8888))
-		{
-			try_receive();
-		}
+public:
+	AndroidSensorServer(boost::asio::io_service& io_service, topviewkinect::vision::TopViewSpace& eaglesense) : 
+		_socket(io_service, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), 8888)),
+		_eaglesense(eaglesense)
+	{
+		try_receive();
+	}
 
-		float accel_x, accel_y, accel_z;
-		float gyro_x, gyro_y, gyro_z;
-		float orientation_x, orientation_y, orientation_z;
-		float linear_accel_x, linear_accel_y, linear_accel_z;
-		float rotation_vec_x, rotation_vec_y, rotation_vec_z;
-		topviewkinect::AndroidSensorData sensor_data_current;
-		std::deque<topviewkinect::AndroidSensorData> sensor_data_history;
+private:
+	double _first_beat = -1;
+	topviewkinect::vision::TopViewSpace& _eaglesense;
+	boost::asio::ip::udp::socket _socket;
+	boost::asio::ip::udp::endpoint _sender_endpoint;
+	const static int buffer_size = 1024;
+	std::array<char, buffer_size> _data;
 
-		const topviewkinect::AndroidSensorData get_sensor_data() const
-		{
-			return sensor_data_current;
-		}
+	void try_receive() {
+		_socket.async_receive_from(
+			boost::asio::buffer(_data, buffer_size - 1), _sender_endpoint,
+			boost::bind(&AndroidSensorServer::handle_receive, this,
+				boost::asio::placeholders::error,
+				boost::asio::placeholders::bytes_transferred));
+	}
 
-		const std::deque<topviewkinect::AndroidSensorData> get_sensor_data_history() const
-		{
-			return this->sensor_data_history;
-		}
+	void handle_receive(const boost::system::error_code& error,
+		std::size_t bytes_transferred) {
+		if (!error || error == boost::asio::error::message_size) {
 
-	private:
-		void try_receive() {
-			_socket.async_receive_from(
-				boost::asio::buffer(_data, buffer_size-1), _sender_endpoint,
-				boost::bind(&AndroidSensorServer::handle_receive, this,
-					boost::asio::placeholders::error,
-					boost::asio::placeholders::bytes_transferred));
-		}
+			topviewkinect::AndroidSensorData data_current = {};
 
-		void handle_receive(const boost::system::error_code& error,
-			std::size_t bytes_transferred) {
-			if (!error || error == boost::asio::error::message_size) {
-				std::string sensor_data_str(&_data[0], &_data[0] + bytes_transferred);
+			std::string sensor_data_str(&_data[0], &_data[0] + bytes_transferred);
+			std::stringstream ss(sensor_data_str);
+			
+			//std::cout << ss.str() << std::endl;
+			data_current.addr = _sender_endpoint.address().to_string() + ":" + std::to_string(_sender_endpoint.port());
+
+			// parsing results from an Android app
+			bool time_parsed = false;
+			while (ss.good())
+			{
+				std::string substr;
+				std::getline(ss, substr, ',');
 				
-				std::vector<float> sensor_data_delimited;
-				std::stringstream ss(sensor_data_str);
-
-				while (ss.good())
+				if (!time_parsed)
 				{
-					std::string substr;
-					std::getline(ss, substr, ',');
-					sensor_data_delimited.push_back(std::stof(substr));
+					double arrival_time = std::stod(substr);
+					if (this->_first_beat < 0)
+					{
+						this->_first_beat = arrival_time;
+					}
+					
+					data_current.arrival_time = (arrival_time - this->_first_beat);
+					time_parsed = true;
+				}
+				
+				float value = std::stof(substr);
+
+				// acceleromter
+				if (value == 3)
+				{
+					std::string accel_x_substr;
+					std::getline(ss, accel_x_substr, ',');
+					float accel_x = std::stof(accel_x_substr);
+					data_current.accel_x = accel_x;
+
+					std::string accel_y_substr;
+					std::getline(ss, accel_y_substr, ',');
+					float accel_y = std::stof(accel_y_substr);
+					data_current.accel_y = accel_y;
+
+					std::string accel_z_substr;
+					std::getline(ss, accel_z_substr, ',');
+					float accel_z = std::stof(accel_z_substr);
+					data_current.accel_z = accel_z;
 				}
 
-				accel_x = sensor_data_delimited[2], accel_y = sensor_data_delimited[3], accel_z = sensor_data_delimited[4];
-				gyro_x = sensor_data_delimited[6], gyro_y = sensor_data_delimited[7], gyro_z = sensor_data_delimited[8];
-				orientation_x = sensor_data_delimited[14], orientation_y = sensor_data_delimited[15], orientation_z = sensor_data_delimited[16];
-				linear_accel_x = sensor_data_delimited[18], linear_accel_y = sensor_data_delimited[19], linear_accel_z = sensor_data_delimited[20];
-				rotation_vec_x = sensor_data_delimited[22], rotation_vec_y = sensor_data_delimited[23], rotation_vec_z = sensor_data_delimited[24];
-				sensor_data_current = { accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z, orientation_x, orientation_y, orientation_z, linear_accel_x, linear_accel_y, linear_accel_z, rotation_vec_x, rotation_vec_y, rotation_vec_z };
-
-				this->sensor_data_history.push_back(sensor_data_current);
-				if (this->sensor_data_history.size() > 300)
+				// gyro
+				if (value == 4)
 				{
-					this->sensor_data_history.pop_front();
+					std::string gyro_x_substr;
+					std::getline(ss, gyro_x_substr, ',');
+					float gyro_x = std::stof(gyro_x_substr);
+					data_current.gyro_x = gyro_x;
+
+					std::string gyro_y_substr;
+					std::getline(ss, gyro_y_substr, ',');
+					float gyro_y = std::stof(gyro_y_substr);
+					data_current.gyro_y = gyro_y;
+
+					std::string gyro_z_substr;
+					std::getline(ss, gyro_z_substr, ',');
+					float gyro_z = std::stof(gyro_z_substr);
+					data_current.gyro_z = gyro_z;
 				}
 
-				topviewkinect::util::log_println(sensor_data_current.to_str());
+				// orientation
+				if (value == 81)
+				{
+					std::string orientation_x_substr;
+					std::getline(ss, orientation_x_substr, ',');
+					float orientation_x = std::stof(orientation_x_substr);
+					data_current.orientation_x = orientation_x;
 
-				try_receive();
+					std::string orientation_y_substr;
+					std::getline(ss, orientation_y_substr, ',');
+					float orientation_y = std::stof(orientation_y_substr);
+					data_current.orientation_y = orientation_y;
+
+					std::string orientation_z_substr;
+					std::getline(ss, orientation_z_substr, ',');
+					float orientation_z = std::stof(orientation_z_substr);
+					data_current.orientation_z = orientation_z;
+				}
+
+				// linear_accel
+				if (value == 82)
+				{
+					std::string linear_accel_x_substr;
+					std::getline(ss, linear_accel_x_substr, ',');
+					float linear_accel_x = std::stof(linear_accel_x_substr);
+					data_current.linear_accel_x = linear_accel_x;
+
+					std::string linear_accel_y_substr;
+					std::getline(ss, linear_accel_y_substr, ',');
+					float linear_accel_y = std::stof(linear_accel_y_substr);
+					data_current.linear_accel_y = linear_accel_y;
+
+					std::string linear_accel_z_substr;
+					std::getline(ss, linear_accel_z_substr, ',');
+					float linear_accel_z = std::stof(linear_accel_z_substr);
+					data_current.linear_accel_z = linear_accel_z;
+				}
+
+				// gravity
+				if (value == 83)
+				{
+					std::string gravity_x_substr;
+					std::getline(ss, gravity_x_substr, ',');
+					float gravity_x = std::stof(gravity_x_substr);
+					data_current.gravity_x = gravity_x;
+
+					std::string gravity_y_substr;
+					std::getline(ss, gravity_y_substr, ',');
+					float gravity_y = std::stof(gravity_y_substr);
+					data_current.gravity_y = gravity_y;
+
+					std::string gravity_z_substr;
+					std::getline(ss, gravity_z_substr, ',');
+					float gravity_z = std::stof(gravity_z_substr);
+					data_current.gravity_z = gravity_z;
+				}
+
+				// rotation vect
+				if (value == 84)
+				{
+					std::string rotation_x_substr;
+					std::getline(ss, rotation_x_substr, ',');
+					float rotation_x = std::stof(rotation_x_substr);
+					data_current.rotation_x = rotation_x;
+
+					std::string rotation_y_substr;
+					std::getline(ss, rotation_y_substr, ',');
+					float rotation_y = std::stof(rotation_y_substr);
+					data_current.rotation_y = rotation_y;
+
+					std::string rotation_z_substr;
+					std::getline(ss, rotation_z_substr, ',');
+					float rotation_z = std::stof(rotation_z_substr);
+					data_current.rotation_z = rotation_z;
+				}
 			}
-		}
 
-		void handle_send(std::shared_ptr<std::string> message,
-			const boost::system::error_code& ec,
-			std::size_t bytes_transferred) {
+			_eaglesense.refresh_android_sensor_data(data_current);
+			//topviewkinect::util::log_println(data_current.to_str());
+
 			try_receive();
 		}
+	}
 
-		boost::asio::ip::udp::socket _socket;
-		boost::asio::ip::udp::endpoint _sender_endpoint;
-		const static int buffer_size = 1024;
-		std::array<char, buffer_size> _data;
+	void handle_send(std::shared_ptr<std::string> message,
+		const boost::system::error_code& ec,
+		std::size_t bytes_transferred) {
+		try_receive();
+	}
 };
 
 int main(int argc, char* argv[])
 {
-    // Update EagleSense root directory
-    std::string args = *argv;
-    std::vector<std::string> delimited = topviewkinect::util::string_split(args, '\\');
-    std::ostringstream eaglesense_directory_ss;
-    for (auto dir = delimited.begin(); dir != delimited.end(); ++dir)
-    {
-        eaglesense_directory_ss << *dir;
-        if (*dir == "eaglesense")
-        {
-            break;
-        }
-        eaglesense_directory_ss << "/";
-    }
-    topviewkinect::set_eaglesense_directory(eaglesense_directory_ss.str());
+	// Update EagleSense root directory
+	std::string args = *argv;
+	std::vector<std::string> delimited = topviewkinect::util::string_split(args, '\\');
+	std::ostringstream eaglesense_directory_ss;
+	for (auto dir = delimited.begin(); dir != delimited.end(); ++dir)
+	{
+		eaglesense_directory_ss << *dir;
+		if (*dir == "eaglesense")
+		{
+			break;
+		}
+		eaglesense_directory_ss << "/";
+	}
+	topviewkinect::set_eaglesense_directory(eaglesense_directory_ss.str());
 
-    // Define program options
-    boost::program_options::options_description all_opts("Help");
+	// Define program options
+	boost::program_options::options_description all_opts("Help");
 
-    boost::program_options::options_description general_opts("General");
-    general_opts.add_options()
-        ("help,h", "Help");
+	boost::program_options::options_description general_opts("General");
+	general_opts.add_options()
+		("help,h", "Help");
 
-    boost::program_options::options_description advanced_opts("Advanced (working with datasets)");
-    int dataset_id;
-    std::string dataset_name;
-    advanced_opts.add_options()
-        ("replay,r", "Replay")
-        ("capture,c", "Capture")
-        ("postprocess,p", "Postprocess")
-        ("keep_label,k", "Keep labels during postprocessing")
-        ("dataset_id,d", boost::program_options::value<int>(&dataset_id), "Dataset ID (required)")
-        ("dataset_name,n", boost::program_options::value<std::string>(&dataset_name)->default_value("Untitled"), "Dataset name");
+	boost::program_options::options_description advanced_opts("Advanced (working with datasets)");
+	int dataset_id;
+	std::string dataset_name;
+	advanced_opts.add_options()
+		("replay,r", "Replay")
+		("capture,c", "Capture")
+		("postprocess,p", "Postprocess")
+		("keep_label,k", "Keep labels during postprocessing")
+		("dataset_id,d", boost::program_options::value<int>(&dataset_id), "Dataset ID (required)")
+		("dataset_name,n", boost::program_options::value<std::string>(&dataset_name)->default_value("Untitled"), "Dataset name");
 
-    all_opts.add(general_opts).add(advanced_opts);
+	all_opts.add(general_opts).add(advanced_opts);
 
-    // Parse program options
-    boost::program_options::variables_map program_options;
-    try
-    {
-        boost::program_options::store(boost::program_options::parse_command_line(argc, argv, all_opts), program_options);
-        boost::program_options::notify(program_options);
-    }
-    catch (boost::program_options::error& e)
-    {
-        std::cout << "Invalid." << " " << e.what() << std::endl;
-        std::cout << all_opts << std::endl;
-        return EXIT_FAILURE;
-    }
+	// Parse program options
+	boost::program_options::variables_map program_options;
+	try
+	{
+		boost::program_options::store(boost::program_options::parse_command_line(argc, argv, all_opts), program_options);
+		boost::program_options::notify(program_options);
+	}
+	catch (boost::program_options::error& e)
+	{
+		std::cout << "Invalid." << " " << e.what() << std::endl;
+		std::cout << all_opts << std::endl;
+		return EXIT_FAILURE;
+	}
 
 	// EagleSense welcome message
-    std::cout << "EagleSense topviewkinect " << topviewkinect::VERSION << std::endl;
+	std::cout << "EagleSense topviewkinect " << topviewkinect::VERSION << std::endl;
 
-    // -h help
-    if (program_options.count("help"))
-    {
-        std::cout << all_opts << std::endl;
-        return EXIT_SUCCESS;
-    }
+	// -h help
+	if (program_options.count("help"))
+	{
+		std::cout << all_opts << std::endl;
+		return EXIT_SUCCESS;
+	}
 
-	// OpenCv
-	std::cout << cv::getBuildInformation() << std::endl;
+	// OpenCV CUDA
+	cv::cuda::printShortCudaDeviceInfo(cv::cuda::getDevice());
 
-    if (argc == 1)
-    {
-        return start();
-    }
+	if (argc == 1)
+	{
+		return start();
+	}
 
-    // Advanced (working with datasets)
-    if (!program_options.count("dataset_id"))
-    {
-        std::cout << "Missing dataset ID." << std::endl;
-        return EXIT_FAILURE;
-    }
+	// Advanced (working with datasets)
+	if (!program_options.count("dataset_id"))
+	{
+		std::cout << "Missing dataset ID." << std::endl;
+		return EXIT_FAILURE;
+	}
 
-    // -r replay
-    if (program_options.count("replay"))
-    {
-        return replay(dataset_id);
-    }
+	// -r replay
+	if (program_options.count("replay"))
+	{
+		return replay(dataset_id);
+	}
 
-    // -c capture
-    if (program_options.count("capture"))
-    {
-        return capture(dataset_id);
-    }
-    
-    // -p postprocess
-    if (program_options.count("postprocess"))
-    {
-        bool keep_label = program_options.count("keep_label") == 1;
-        return postprocess(dataset_id, dataset_name, keep_label);
-    }
+	// -c capture
+	if (program_options.count("capture"))
+	{
+		return capture(dataset_id);
+	}
 
-    return EXIT_SUCCESS;
+	// -p postprocess
+	if (program_options.count("postprocess"))
+	{
+		bool keep_label = program_options.count("keep_label") == 1;
+		return postprocess(dataset_id, dataset_name, keep_label);
+	}
+
+	return EXIT_SUCCESS;
 }
 
 static int start()
 {
+		topviewkinect::util::log_println("Tracking ...");
+
+	// Create interactive space
+	topviewkinect::vision::TopViewSpace m_space;
+	bool space_initialized = m_space.initialize();
+	if (!space_initialized)
+	{
+		topviewkinect::util::log_println("Failed to initialize TopViewSpace. Exiting ...");
+		return EXIT_FAILURE;
+	}
+
 	topviewkinect::util::log_println("Start server ...");
 
 	boost::asio::io_service io_service;
-	AndroidSensorServer server{ io_service };
+	AndroidSensorServer server(io_service, m_space);
 	std::thread thread1([&io_service]() { io_service.run(); });
 
-    topviewkinect::util::log_println("Tracking ...");
-
-    // Create interactive space
-    topviewkinect::vision::TopViewSpace m_space;
-    bool space_initialized = m_space.initialize();
-    if (!space_initialized)
-    {
-        topviewkinect::util::log_println("Failed. Exiting...");
-        return EXIT_FAILURE;
-    }
-
 	// Create windows
-	cv::namedWindow(DEPTH_WINDOW_NAME);
-	cv::namedWindow(INFRARED_WINDOW_NAME);
-	cv::namedWindow(SPACE_WINDOW_NAME);
-	cv::namedWindow(ANDROID_SENSOR_WINDOW_NAME);
+	cv::namedWindow(DEPTH_WIN_NAME);
+	cv::namedWindow(INFRARED_WIN_NAME);
+	cv::namedWindow(ANDROID_SENSOR_WIN_NAME);
+	cv::namedWindow(SPACE_WIN_NAME);
 	const cv::Size enlarged_size = cv::Size(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE.width * 2, topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE.height * 2);
 	cv::Mat visualization_frame_enlarged = cv::Mat::zeros(enlarged_size, CV_8UC3);
 
-    // Tracking
-    while (true)
-    {
+	// Tracking
+	while (true)
+	{
 		cv::Mat depth_frame = m_space.get_depth_frame();
 		cv::Mat infrared_frame = m_space.get_infrared_frame();
-		cv::Mat visualization_frame = m_space.get_visualization_frame();
 		cv::Mat android_sensor_frame = m_space.get_android_sensor_frame();
+		cv::Mat visualization_frame = m_space.get_visualization_frame();
 		cv::resize(visualization_frame, visualization_frame_enlarged, visualization_frame_enlarged.size(), 0, 0, cv::INTER_LINEAR);
 
-        cv::imshow(DEPTH_WINDOW_NAME, depth_frame);
-        cv::imshow(INFRARED_WINDOW_NAME, infrared_frame);
-        cv::imshow(SPACE_WINDOW_NAME, visualization_frame_enlarged);
-		cv::imshow(ANDROID_SENSOR_WINDOW_NAME, android_sensor_frame);
+		cv::imshow(DEPTH_WIN_NAME, depth_frame);
+		cv::imshow(INFRARED_WIN_NAME, infrared_frame);
+		cv::imshow(ANDROID_SENSOR_WIN_NAME, android_sensor_frame);
+		cv::imshow(SPACE_WIN_NAME, visualization_frame_enlarged);
 
-        int ascii_keypress = cv::waitKey(1); // any key to exit
-        if (ascii_keypress != -1)
-        {
-            topviewkinect::util::log_println("EagleSense topviewkinect exiting...");
-            break;
-        }
-
-		m_space.refresh_android_sensor_data(server.get_sensor_data_history());
-
-        bool frame_received = m_space.refresh_kinect_frames();
-        if (frame_received)
+		int keypress_win_ascii = cv::waitKey(1); // any key to exit
+		if (keypress_win_ascii != -1)
 		{
-            //m_space.process_kinect_frames();
-        }
-    }
+			topviewkinect::util::log_println("EagleSense topviewkinect exiting...");
+			break;
+		}
+
+		bool sensor_frame_updated = m_space.refresh_android_sensor_frame();
+		if (sensor_frame_updated)
+		{
+			m_space.process_android_sensor_data();
+		}
+
+		bool frame_received = m_space.refresh_kinect_frames();
+		if (frame_received)
+		{
+			m_space.process_kinect_frames();
+		}
+	}
 
 	io_service.stop();
 	thread1.join();
-    topviewkinect::util::log_println("Done!");
-    return EXIT_SUCCESS;
+	topviewkinect::util::log_println("Done!");
+	return EXIT_SUCCESS;
 }
 
 static int replay(const int dataset_id)
 {
-    topviewkinect::util::log_println("Replaying ...");
+	topviewkinect::util::log_println("Replaying ...");
 
-    // Create interactive space
-    topviewkinect::vision::TopViewSpace m_space;
-    bool space_initialized = m_space.initialize();
-    if (!space_initialized)
-    {
-        topviewkinect::util::log_println("Failed. Exiting ...");
-        return EXIT_FAILURE;
-    }
+	// Create interactive space
+	topviewkinect::vision::TopViewSpace m_space;
+	bool space_initialized = m_space.initialize();
+	if (!space_initialized)
+	{
+		topviewkinect::util::log_println("Failed. Exiting ...");
+		return EXIT_FAILURE;
+	}
 
-    // Load dataset
-    bool dataset_loaded = m_space.load_dataset(dataset_id);
-    if (!dataset_loaded)
-    {
-        topviewkinect::util::log_println("Failed. Exiting ...");
-        return EXIT_FAILURE;
-    }
+	// Load dataset
+	bool dataset_loaded = m_space.load_dataset(dataset_id);
+	if (!dataset_loaded)
+	{
+		topviewkinect::util::log_println("Failed. Exiting ...");
+		return EXIT_FAILURE;
+	}
 
 	// Create windows
-	cv::namedWindow(DEPTH_WINDOW_NAME);
-	cv::namedWindow(INFRARED_WINDOW_NAME);
-	cv::namedWindow(SPACE_WINDOW_NAME);
-	//cv::namedWindow(SPACE_ENLARGED_WINDOW_NAME);
-	//const cv::Size enlarged_size = cv::Size(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE.width * 2, topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE.height * 2);
-	//cv::Mat visualization_frame_enlarged = cv::Mat::zeros(enlarged_size, CV_8UC3);
+	cv::namedWindow(DEPTH_WIN_NAME);
+	cv::namedWindow(INFRARED_WIN_NAME);
+	cv::namedWindow(SPACE_WIN_NAME);
+	cv::namedWindow(SPACE_ENLARGED_WIN_NAME);
+	cv::namedWindow(ANDROID_SENSOR_WIN_NAME);
+	const cv::Size enlarged_size = cv::Size(topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE.width * 2, topviewkinect::kinect2::CV_DEPTH_FRAME_SIZE.height * 2);
+	cv::Mat visualization_frame_enlarged = cv::Mat::zeros(enlarged_size, CV_8UC3);
 
-    // Replay
-    while (true)
-    {
-        cv::Mat depth_frame = m_space.get_depth_frame();
-        cv::Mat infrared_frame = m_space.get_infrared_frame();
-        cv::Mat visualization_frame = m_space.get_visualization_frame();
+	m_space.offline_calibration();
+
+	// Replay
+	while (true)
+	{
+		cv::Mat depth_frame = m_space.get_depth_frame();
+		cv::Mat infrared_frame = m_space.get_infrared_frame();
+		cv::Mat rgb_frame = m_space.get_rgb_frame();
+		cv::Mat visualization_frame = m_space.get_visualization_frame();
+		cv::Mat android_sensor_frame = m_space.get_android_sensor_frame();
 		//cv::resize(visualization_frame, visualization_frame_enlarged, visualization_frame_enlarged.size(), 0, 0, cv::INTER_LINEAR);
 
-        // Visualize tracking
-        const int frame_id = m_space.get_kinect_frame_id();
-        cv::putText(depth_frame, std::to_string(frame_id), cv::Point(20, 20), cv::FONT_HERSHEY_SIMPLEX, 0.3, topviewkinect::color::CV_WHITE);
-        cv::putText(infrared_frame, std::to_string(frame_id), cv::Point(20, 20), cv::FONT_HERSHEY_SIMPLEX, 0.3, topviewkinect::color::CV_WHITE);
-        cv::putText(visualization_frame, std::to_string(frame_id), cv::Point(20, 20), cv::FONT_HERSHEY_SIMPLEX, 0.3, topviewkinect::color::CV_BGR_WHITE);
-        cv::imshow(DEPTH_WINDOW_NAME, depth_frame);
-        cv::imshow(INFRARED_WINDOW_NAME, infrared_frame);
-		cv::imshow(SPACE_WINDOW_NAME, visualization_frame);
-        //cv::imshow(SPACE_ENLARGED_WINDOW_NAME, visualization_frame_enlarged);
+		// Visualize tracking
+		const int frame_id = m_space.get_kinect_frame_id();
+		cv::putText(depth_frame, std::to_string(frame_id), cv::Point(30, 50), cv::FONT_HERSHEY_SIMPLEX, 1, topviewkinect::color::CV_WHITE, 3);
+		cv::putText(infrared_frame, std::to_string(frame_id), cv::Point(30, 50), cv::FONT_HERSHEY_SIMPLEX, 1, topviewkinect::color::CV_WHITE, 3);
+		cv::putText(visualization_frame, std::to_string(frame_id), cv::Point(30, 50), cv::FONT_HERSHEY_SIMPLEX, 1, topviewkinect::color::CV_BGR_BLACK, 3);
 
-        // Windows
-        int ascii_keypress = cv::waitKeyEx(0);
-        if (ascii_keypress == 2555904) // Win10 right arrow
-        {
-            m_space.replay_next_frame();
-        }
-        else if (ascii_keypress == 2424832) // Win10 left arrow
-        {
-            m_space.replay_previous_frame();
-        }
-        else if (ascii_keypress == 115) // 's'
-        {
-            m_space.save_visualization();
-        }
-        else // anything else
-        {
-            break;
-        }
-    }
+		cv::imshow(DEPTH_WIN_NAME, depth_frame);
+		cv::imshow(INFRARED_WIN_NAME, infrared_frame);
+		cv::imshow(RGB_WIN_NAME, rgb_frame);
+		cv::imshow(SPACE_WIN_NAME, visualization_frame);
+		cv::imshow(ANDROID_SENSOR_WIN_NAME, android_sensor_frame);
+		//cv::imshow(SPACE_ENLARGED_WINDOW_NAME, visualization_frame_enlarged);
 
-    topviewkinect::util::log_println("Done!");
-    return EXIT_SUCCESS;
+		int keypress_win_ascii = cv::waitKeyEx(0);
+		if (keypress_win_ascii == 2555904) // '->'
+		{
+			m_space.replay_next_frame();
+		}
+		else if (keypress_win_ascii == 2424832) // '<-'
+		{
+			m_space.replay_previous_frame();
+		}
+		else if (keypress_win_ascii == 115) // 's'
+		{
+			m_space.save_visualization();
+		}
+		else // anything else
+		{
+			break;
+		}
+	}
+
+	topviewkinect::util::log_println("Done!");
+	return EXIT_SUCCESS;
+}
+
+// Calibration
+std::vector<cv::Point> calibration_points;
+cv::Point new_pt;
+bool calibration_changed = false;
+
+void calibration_on_mouse(int event, int x, int y, int, void* user_data)
+{
+	// Action when left button is clicked
+	if (event == cv::EVENT_LBUTTONDOWN)
+	{
+		new_pt.x = x;
+		new_pt.y = y;
+		//calibration_points.push_back(cv::Point(x, y));
+		calibration_changed = true;
+	}
+
+	// Action when mouse is moving
+	if ((event == cv::EVENT_MOUSEMOVE))
+	{
+		//std::cout << "new pt" << std::endl;
+		//new_pt.x = x;
+		//new_pt.y = y;
+		//calibration_points.push_back(cv::Point(x, y));
+		//calibration_changed = true;
+		//	calibration_points.push_back(cv::Point(x, y));
+		//	calibration_changed = true;
+	}
 }
 
 static int capture(const int dataset_id)
 {
-	topviewkinect::util::log_println("Start server ...");
+	topviewkinect::util::log_println("Capturing ...");
 
+	bool error = false;
+
+	// Create interactive space
+	topviewkinect::vision::TopViewSpace m_space;
+	bool space_initialized = m_space.initialize();
+	if (!space_initialized || error)
+	{
+		topviewkinect::util::log_println("Failed to initialize TopViewSpace. Exiting ...");
+		error = true;
+	}
+
+	// Create dataset
+	bool dataset_created = m_space.create_dataset(dataset_id);
+	if (!dataset_created)
+	{
+		topviewkinect::util::log_println("Failed to initialize dataset. Exiting ...");
+		error = true;
+	}
+
+	// Connect interactive space to server
+	//bool online = m_space.run_server();
 	boost::asio::io_service io_service;
-	AndroidSensorServer server{ io_service };
+	AndroidSensorServer server(io_service, m_space);
 	std::thread thread1([&io_service]() { io_service.run(); });
 
-    topviewkinect::util::log_println("Capturing ...");
+	if (!error)
+	{
+		while (true)
+		{
+			cv::imshow(DEPTH_WIN_NAME, m_space.get_depth_frame());
+			cv::imshow(INFRARED_WIN_NAME, m_space.get_infrared_frame());
+			cv::imshow(INFRARED_LOW_WIN_NAME, m_space.get_low_infrared_frame());
+			cv::imshow(CALIBRATION_WIN_NAME, m_space.get_crossmotion_calibration_frame());
+			cv::imshow(ANDROID_SENSOR_WIN_NAME, m_space.get_android_sensor_frame());
+			cv::imshow(RGB_WIN_NAME, m_space.get_rgb_frame());
 
-    // Create interactive space
-    topviewkinect::vision::TopViewSpace m_space;
-    bool space_initialized = m_space.initialize();
-    if (!space_initialized)
-    {
-        topviewkinect::util::log_println("Failed. Exiting ...");
-        return EXIT_FAILURE;
-    }
+			cv::setMouseCallback(CALIBRATION_WIN_NAME, calibration_on_mouse);
+			if (calibration_changed)
+			{
+				m_space.calibrate_sensor_fusion(new_pt);
+				m_space.save_calibration();
+				calibration_changed = false;
+			}
 
-    // Create dataset
-    bool dataset_created = m_space.create_dataset(dataset_id);
-    if (!dataset_created)
-    {
-        topviewkinect::util::log_println("Failed. Exiting ...");
-        return EXIT_FAILURE;
-    }
+			bool sensor_frame_updated = m_space.refresh_android_sensor_frame();
+			if (sensor_frame_updated)
+			{
+				m_space.save_android_sensor_data();
+			}
 
-    // Capture
-    while (true)
-    {
-        cv::imshow(DEPTH_WINDOW_NAME, m_space.get_depth_frame());
-        cv::imshow(INFRARED_WINDOW_NAME, m_space.get_low_infrared_frame());
-        cv::imshow(SPACE_WINDOW_NAME, m_space.get_rgb_frame());
+			bool frame_received = m_space.refresh_kinect_frames();
+			if (frame_received)
+			{
+				m_space.save_kinect_frames();
+			}
 
-        int ascii_keypress = cv::waitKey(30); // 30 fps
-        if (ascii_keypress != -1)
-        {
-            topviewkinect::util::log_println("System terminating...");
-            break;
-        }
+			int keypress_win_ascii = cv::waitKey(30);
+			if (keypress_win_ascii == 97)
+			{
+				m_space.set_android_sensor_label("bring-device-start");
+				std::cout << "bring-device-start" << std::endl;
+			}
+			if (keypress_win_ascii == 100)
+			{
+				m_space.set_android_sensor_label("bring-device-end");
+				std::cout << "bring-device-end" << std::endl;
+			}
+			if (keypress_win_ascii == 27)
+			{
+				topviewkinect::util::log_println("System terminating...");
+				break;
+			}
+		}
+	}
 
-        bool frame_received = m_space.refresh_kinect_frames();
-        if (frame_received)
-        {
-			m_space.save_android_sensor_data(server.get_sensor_data());
-            m_space.save_kinect_frames();
-        }
-    }
+	// Capture
+	//while (true)
+	//{
+	//	cv::imshow(DEPTH_WINDOW_NAME, m_space.get_depth_frame());
+	//	cv::imshow(INFRARED_WINDOW_NAME, m_space.get_low_infrared_frame());
+	//	cv::imshow(SPACE_WINDOW_NAME, m_space.get_rgb_frame());
 
+	//	int ascii_keypress = cv::waitKey(30); // 30 fps
+	//	if (ascii_keypress != -1)
+	//	{
+	//		topviewkinect::util::log_println("System terminating...");
+	//		break;
+	//	}
+
+	//	bool frame_received = m_space.refresh_kinect_frames();
+	//	const topviewkinect::AndroidSensorData sensor_data = server.get_sensor_data();
+	//	if (frame_received)
+	//	{
+	//		m_space.save_android_sensor_data(sensor_data);
+	//		m_space.save_kinect_frames();
+	//	}
+	//}
+
+	// Exit server
 	io_service.stop();
 	thread1.join();
-    topviewkinect::util::log_println("Done!");
-    return EXIT_SUCCESS;
+
+	topviewkinect::util::log_println("Done!");
+
+	return EXIT_SUCCESS;
 }
 
 static int postprocess(const int dataset_id, const std::string& dataset_name, const bool keep_label)
 {
-    std::string info;
-    keep_label ? info = "(keep labels)" : "";
-    topviewkinect::util::log_println("Postprocessing " + info + " ... ");
+	std::string info;
+	keep_label ? info = "(keep labels)" : "";
+	topviewkinect::util::log_println("Postprocessing " + info + " ... ");
 
-    // Create interactive space
-    topviewkinect::vision::TopViewSpace m_space;
-    // Skip tracking initialization
+	// Create interactive space
+	topviewkinect::vision::TopViewSpace m_space;
+	// Skip tracking initialization
 
-    // Load dataset
-    bool dataset_loaded = m_space.load_dataset(dataset_id);
-    if (!dataset_loaded)
-    {
-        topviewkinect::util::log_println("Failed. Exiting ...");
-        return EXIT_FAILURE;
-    }
+	// Load dataset
+	bool dataset_loaded = m_space.load_dataset(dataset_id);
+	if (!dataset_loaded)
+	{
+		topviewkinect::util::log_println("Failed. Exiting ...");
+		return EXIT_FAILURE;
+	}
 
-    // Postprocess
-    m_space.postprocess(dataset_name, keep_label);
+	// Postprocess
+	m_space.postprocess(dataset_name, keep_label);
 
-    topviewkinect::util::log_println("Done!");
-    return EXIT_SUCCESS;
+	topviewkinect::util::log_println("Done!");
+	return EXIT_SUCCESS;
 }
