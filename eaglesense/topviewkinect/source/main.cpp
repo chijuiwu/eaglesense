@@ -387,10 +387,10 @@ static int start()
 			break;
 		}
 
-		bool sensor_frame_updated = m_space.refresh_android_sensor_frame();
+		bool sensor_frame_updated = m_space.process_android_sensor_data();
 		if (sensor_frame_updated)
 		{
-			m_space.process_android_sensor_data();
+			m_space.refresh_android_sensor_frame();
 		}
 
 		bool frame_received = m_space.refresh_kinect_frames();
@@ -542,6 +542,8 @@ static int capture(const int dataset_id)
 	AndroidSensorServer server(io_service, m_space);
 	std::thread thread1([&io_service]() { io_service.run(); });
 
+	int keypress_prev = 0;
+
 	if (!error)
 	{
 		while (true)
@@ -576,13 +578,33 @@ static int capture(const int dataset_id)
 			int keypress_win_ascii = cv::waitKey(30);
 			if (keypress_win_ascii == 97)
 			{
-				m_space.set_android_sensor_label("bring-device-start");
-				std::cout << "bring-device-start" << std::endl;
+				if (keypress_prev != 97)
+				{
+					m_space.set_android_sensor_label("device-inward-start");
+					std::cout << "device-inward-start" << std::endl;
+					keypress_prev = 97;
+				}
+				else
+				{
+					m_space.set_android_sensor_label("rest");
+					std::cout << "rest" << std::endl;
+					keypress_prev = 0;
+				}
 			}
 			if (keypress_win_ascii == 100)
 			{
-				m_space.set_android_sensor_label("bring-device-end");
-				std::cout << "bring-device-end" << std::endl;
+				if (keypress_prev != 100)
+				{
+					m_space.set_android_sensor_label("device-outward-start");
+					std::cout << "device-outward-start" << std::endl;
+					keypress_prev = 100;
+				}
+				else
+				{
+					m_space.set_android_sensor_label("rest");
+					std::cout << "rest" << std::endl;
+					keypress_prev = 0;
+				}
 			}
 			if (keypress_win_ascii == 27)
 			{

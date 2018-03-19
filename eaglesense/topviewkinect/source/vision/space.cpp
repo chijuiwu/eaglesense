@@ -743,6 +743,20 @@ namespace topviewkinect
 			}
 			this->android_sensor_mutex.unlock();
 
+			// gesture
+
+			std::string gesture_str = "Phone : rest";
+			if (this->current_gesture == 1)
+			{
+				gesture_str = "Phone : inward";
+			}
+			else if (this->current_gesture == 2)
+			{
+				gesture_str = "Phone : outward";
+			}
+
+			cv::putText(this->android_sensor_frame, gesture_str, cv::Point(100, 50), CV_FONT_HERSHEY_COMPLEX, 1.3, topviewkinect::color::CV_BGR_BLACK, 2);
+
 			return true;
 		}
 
@@ -767,11 +781,7 @@ namespace topviewkinect
 			bool predicted = this->interaction_classifier.recognize_gesture_phone(android_sensor_sample, &gesture_type);
 			if (predicted)
 			{
-				if (gesture_type == 1)
-				{
-					std::cout << "IT WORKS!!!!!!!!!!!!!!!!!!!!" << std::endl;
-				}
-				std::cout << "gesture : " << gesture_type << std::endl;
+				this->current_gesture = gesture_type;
 			}
 
 			return true;
@@ -1114,14 +1124,20 @@ namespace topviewkinect
 
 		void TopViewSpace::set_android_sensor_label(const std::string& label)
 		{
-			if (label.compare("bring-device-start") == 0)
+			this->android_sensor_mutex.lock();
+			if (label.compare("device-inward-start") == 0)
 			{
 				this->android_sensor_label = 1;
 			}
-			if (label.compare("bring-device-end") == 0)
+			else if (label.compare("device-outward-start") == 0)
+			{
+				this->android_sensor_label = 2;
+			}
+			else
 			{
 				this->android_sensor_label = 0;
 			}
+			this->android_sensor_mutex.unlock();
 		}
 
 		bool TopViewSpace::save_android_sensor_data()

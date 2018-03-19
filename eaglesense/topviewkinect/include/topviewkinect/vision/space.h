@@ -99,6 +99,7 @@ namespace topviewkinect
 			cv::Mat android_sensor_frame;
 
 			// Sensor data
+			int current_gesture;
 			std::mutex android_sensor_mutex;
 			std::deque<topviewkinect::AndroidSensorData> android_sensor_data;
 			std::deque<topviewkinect::AndroidSensorData> android_sensor_data_tmp;

@@ -33,6 +33,7 @@ namespace topviewkinect
             PyObject* booster_predict_func;
             PyObject* dmatrix_class;
 
+			PyObject* fft_features_func;
 			PyObject* gesture_recognition_phone_model;
 			PyObject* gesture_recognition_phone_predict_func;
 
