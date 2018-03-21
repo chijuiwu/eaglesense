@@ -49,6 +49,9 @@
     <Filter Include="Header Files\thirdparty\liu_optflow">
       <UniqueIdentifier>{1bcb2b72-8a21-42fb-ab0d-7193e23c72d5}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\thirdparty\uWave">
+      <UniqueIdentifier>{ea18593b-3019-4274-a348-3f7ab8a291b6}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\stdafx.h">

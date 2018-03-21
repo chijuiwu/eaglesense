@@ -707,7 +707,7 @@ namespace topviewkinect
 			{
 				cv::putText(this->android_sensor_frame, "0 - ", cv::Point(5, 150), CV_FONT_HERSHEY_SIMPLEX, 0.3, topviewkinect::color::CV_BGR_BLACK, 1);
 				cv::line(this->android_sensor_frame, cv::Point(accel_x_origin_x, accel_x_origin_y), cv::Point(accel_x_origin_x, 50), topviewkinect::color::CV_BGR_BLACK, 1);
-				cv::line(this->android_sensor_frame, cv::Point(accel_x_origin_x, accel_x_origin_y), cv::Point(1200, accel_x_origin_y), topviewkinect::color::CV_BGR_BLACK, 1);
+				cv::line(this->android_sensor_frame, cv::Point(accel_x_origin_x, accel_x_origin_y), cv::Point(accel_x_origin_x + 250 * 5, accel_x_origin_y), topviewkinect::color::CV_BGR_BLACK, 1);
 			}
 
 			// device acceleration, Y axis
@@ -715,7 +715,7 @@ namespace topviewkinect
 			{
 				cv::putText(this->android_sensor_frame, "0 - ", cv::Point(5, 400), CV_FONT_HERSHEY_SIMPLEX, 0.3, topviewkinect::color::CV_BGR_BLACK, 1);
 				cv::line(this->android_sensor_frame, cv::Point(accel_y_origin_x, accel_y_origin_y), cv::Point(accel_y_origin_x, 300), topviewkinect::color::CV_BGR_BLACK, 1);
-				cv::line(this->android_sensor_frame, cv::Point(accel_y_origin_x, accel_y_origin_y), cv::Point(1200, accel_y_origin_y), topviewkinect::color::CV_BGR_BLACK, 1);
+				cv::line(this->android_sensor_frame, cv::Point(accel_y_origin_x, accel_y_origin_y), cv::Point(accel_y_origin_x + 250 * 5, accel_y_origin_y), topviewkinect::color::CV_BGR_BLACK, 1);
 			}
 
 			// device acceleration, Z axis
@@ -723,7 +723,15 @@ namespace topviewkinect
 			{
 				cv::putText(this->android_sensor_frame, "0 - ", cv::Point(5, 650), CV_FONT_HERSHEY_SIMPLEX, 0.3, topviewkinect::color::CV_BGR_BLACK, 1);
 				cv::line(this->android_sensor_frame, cv::Point(accel_z_origin_x, accel_z_origin_y), cv::Point(accel_z_origin_x, 550), topviewkinect::color::CV_BGR_BLACK, 1);
-				cv::line(this->android_sensor_frame, cv::Point(accel_z_origin_x, accel_z_origin_y), cv::Point(1200, accel_z_origin_y), topviewkinect::color::CV_BGR_BLACK, 1);
+				cv::line(this->android_sensor_frame, cv::Point(accel_z_origin_x, accel_z_origin_y), cv::Point(accel_z_origin_x + 250 * 5, accel_z_origin_y), topviewkinect::color::CV_BGR_BLACK, 1);
+			}
+
+			// frame seapration
+			int total_length = accel_x_origin_x + 250 * 5;
+			int frame_length = total_length / 10;
+			for (int i = 1; i < 10; ++i)
+			{
+				cv::line(this->android_sensor_frame, cv::Point(accel_x_origin_x + i * frame_length, accel_x_origin_y), cv::Point(accel_x_origin_x + i * frame_length, 50), topviewkinect::color::CV_BGR_GREY, 1);
 			}
 
 			// data
@@ -744,7 +752,6 @@ namespace topviewkinect
 			this->android_sensor_mutex.unlock();
 
 			// gesture
-
 			std::string gesture_str = "Phone : rest";
 			if (this->current_gesture == 1)
 			{
@@ -760,7 +767,7 @@ namespace topviewkinect
 			return true;
 		}
 
-		bool TopViewSpace::process_android_sensor_data() 
+		bool TopViewSpace::process_android_sensor_data()
 		{
 			// Recognize gesture
 			std::vector<topviewkinect::AndroidSensorData> android_sensor_sample;

@@ -294,19 +294,23 @@ namespace topviewkinect
 			double initial_data_arrival_time = data[0].arrival_time;
 
 			// accelerometer x, y, z, and time
-			int features_length = (3+1);
+			//const int features_length = (3);
+			const int features_length = (3+1);
 
 			// Create C 2D array
 			double* X_c_array = new double[features_length * window_size];
 			for (int i = 0; i < window_size; ++i)
 			{
 				const topviewkinect::AndroidSensorData data_point = data[i];
-				std::array<double, 4> sensor_data_features = { data_point.linear_accel_x, data_point.linear_accel_y, data_point.linear_accel_z, data_point.arrival_time - initial_data_arrival_time};
+				//std::array<double, features_length> sensor_data_features = { data_point.linear_accel_x, data_point.linear_accel_y, data_point.linear_accel_z};
+				std::array<double, features_length> sensor_data_features = { data_point.linear_accel_x, data_point.linear_accel_y, data_point.linear_accel_z, data_point.arrival_time - initial_data_arrival_time};
 				std::copy(sensor_data_features.begin(), sensor_data_features.end(), X_c_array + i * sensor_data_features.size());
 			}
 
 			// Create NumPy 2D Array
-			const int nrow = 200;
+			//const int nrow = 1;
+			//const int ncol = features_length * window_size;
+			const int nrow = window_size;
 			const int ncol = features_length;
 			const int ndimension = 2;
 			npy_intp shape[ndimension] = { nrow, ncol };
@@ -322,10 +326,11 @@ namespace topviewkinect
 				topviewkinect::util::log_println("Failed to construct X NumPy Array !!");
 			}
 
-			// Feature extract
+			// FFT Feature extract
 			PyObject* X_fft = PyObject_CallFunctionObjArgs(this->fft_features_func, X_np_array, NULL);
 			PyArrayObject* X_fft_np_array = reinterpret_cast<PyArrayObject*>(X_fft);
 
+			//PyObject* y_pred = PyObject_CallFunctionObjArgs(this->gesture_recognition_phone_predict_func, X_np_array, NULL); // y_pred = model.predict(X)
 			PyObject* y_pred = PyObject_CallFunctionObjArgs(this->gesture_recognition_phone_predict_func, X_fft_np_array, NULL); // y_pred = model.predict(X)
 			if (!y_pred)
 			{
