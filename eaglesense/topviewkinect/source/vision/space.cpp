@@ -49,109 +49,109 @@ You should have received a copy of the GNU General Public License along with thi
 #include "topviewkinect/kinect2.h"
 #include "topviewkinect/vision/space.h"
 
-// Important to include this before flowIO.h!
-#include "thirdparty/mpi/imageLib.h"
-#include "thirdparty/mpi/flowIO.h"
-#include "thirdparty/mpi/colorcode.h"
+//// Important to include this before flowIO.h!
+//#include "thirdparty/mpi/imageLib.h"
+//#include "thirdparty/mpi/flowIO.h"
+//#include "thirdparty/mpi/colorcode.h"
+//
+//// Liu OptFlow
+//#include "thirdparty/liu_optflow/OpticalFlow.h"
+//#include "thirdparty/liu_optflow/project.h"
+//#include "thirdparty/liu_optflow/image.h"
+//
+//// YOLO
+//#ifdef _WIN32
+//#define OPENCV
+//#endif
+//#define TRACK_OPTFLOW
+//#include "yolo_v2_class.hpp"
+//#ifdef OPENCV
+//#include <opencv2/opencv.hpp>
+//#include "opencv2/core/version.hpp"
 
-// Liu OptFlow
-#include "thirdparty/liu_optflow/OpticalFlow.h"
-#include "thirdparty/liu_optflow/project.h"
-#include "thirdparty/liu_optflow/image.h"
-
-// YOLO
-#ifdef _WIN32
-#define OPENCV
-#endif
-#define TRACK_OPTFLOW
-#include "yolo_v2_class.hpp"
-#ifdef OPENCV
-#include <opencv2/opencv.hpp>
-#include "opencv2/core/version.hpp"
-
-std::vector<std::string> objects_names_from_file(std::string const filename) {
-	std::ifstream file(filename);
-	std::vector<std::string> file_lines;
-	if (!file.is_open()) return file_lines;
-	for (std::string line; getline(file, line);) file_lines.push_back(line);
-	std::cout << "object names loaded \n";
-	return file_lines;
-}
-
-void draw_boxes(cv::Mat mat_img, std::vector<bbox_t> result_vec, std::vector<std::string> obj_names,
-	int current_det_fps = -1, int current_cap_fps = -1)
-{
-	int const colors[6][3] = { { 1,0,1 },{ 0,0,1 },{ 0,1,1 },{ 0,1,0 },{ 1,1,0 },{ 1,0,0 } };
-
-	for (auto &i : result_vec) {
-		cv::Scalar color = obj_id_to_color(i.obj_id);
-		cv::rectangle(mat_img, cv::Rect(i.x, i.y, i.w, i.h), color, 2);
-		if (obj_names.size() > i.obj_id) {
-			std::string obj_name = obj_names[i.obj_id];
-			if (i.track_id > 0) obj_name += " - " + std::to_string(i.track_id);
-			cv::Size const text_size = getTextSize(obj_name, cv::FONT_HERSHEY_COMPLEX_SMALL, 1.2, 2, 0);
-			int const max_width = (text_size.width > i.w + 2) ? text_size.width : (i.w + 2);
-			cv::rectangle(mat_img, cv::Point2f(std::max((int)i.x - 1, 0), std::max((int)i.y - 30, 0)),
-				cv::Point2f(std::min((int)i.x + max_width, mat_img.cols - 1), std::min((int)i.y, mat_img.rows - 1)),
-				color, CV_FILLED, 8, 0);
-			putText(mat_img, obj_name, cv::Point2f(i.x, i.y - 10), cv::FONT_HERSHEY_COMPLEX_SMALL, 1.2, cv::Scalar(0, 0, 0), 2);
-		}
-	}
-	if (current_det_fps >= 0 && current_cap_fps >= 0) {
-		std::string fps_str = "FPS detection: " + std::to_string(current_det_fps) + "   FPS capture: " + std::to_string(current_cap_fps);
-		putText(mat_img, fps_str, cv::Point2f(10, 20), cv::FONT_HERSHEY_COMPLEX_SMALL, 1.2, cv::Scalar(50, 255, 0), 2);
-	}
-}
-#endif	// OPENCV
-
-void MotionToColor(CFloatImage motim, CByteImage &colim, float maxmotion)
-{
-	CShape sh = motim.Shape();
-	int width = sh.width, height = sh.height;
-	colim.ReAllocate(CShape(width, height, 3));
-	int x, y;
-	// determine motion range:
-	float maxx = -999, maxy = -999;
-	float minx = 999, miny = 999;
-	float maxrad = -1;
-	for (y = 0; y < height; y++) {
-		for (x = 0; x < width; x++) {
-			float fx = motim.Pixel(x, y, 0);
-			float fy = motim.Pixel(x, y, 1);
-			if (unknown_flow(fx, fy))
-				continue;
-			maxx = __max(maxx, fx);
-			maxy = __max(maxy, fy);
-			minx = __min(minx, fx);
-			miny = __min(miny, fy);
-			float rad = sqrt(fx * fx + fy * fy);
-			maxrad = __max(maxrad, rad);
-		}
-	}
-	printf("max motion: %.4f  motion range: u = %.3f .. %.3f;  v = %.3f .. %.3f\n",
-		maxrad, minx, maxx, miny, maxy);
-
-
-	if (maxmotion > 0) // i.e., specified on commandline
-		maxrad = maxmotion;
-
-	if (maxrad == 0) // if flow == 0 everywhere
-		maxrad = 1;
-
-	for (y = 0; y < height; y++) {
-		for (x = 0; x < width; x++) {
-			float fx = motim.Pixel(x, y, 0);
-			float fy = motim.Pixel(x, y, 1);
-			uchar *pix = &colim.Pixel(x, y, 0);
-			if (unknown_flow(fx, fy)) {
-				pix[0] = pix[1] = pix[2] = 0;
-			}
-			else {
-				computeColor(fx / maxrad, fy / maxrad, pix);
-			}
-		}
-	}
-}
+//std::vector<std::string> objects_names_from_file(std::string const filename) {
+//	std::ifstream file(filename);
+//	std::vector<std::string> file_lines;
+//	if (!file.is_open()) return file_lines;
+//	for (std::string line; getline(file, line);) file_lines.push_back(line);
+//	std::cout << "object names loaded \n";
+//	return file_lines;
+//}
+//
+//void draw_boxes(cv::Mat mat_img, std::vector<bbox_t> result_vec, std::vector<std::string> obj_names,
+//	int current_det_fps = -1, int current_cap_fps = -1)
+//{
+//	int const colors[6][3] = { { 1,0,1 },{ 0,0,1 },{ 0,1,1 },{ 0,1,0 },{ 1,1,0 },{ 1,0,0 } };
+//
+//	for (auto &i : result_vec) {
+//		cv::Scalar color = obj_id_to_color(i.obj_id);
+//		cv::rectangle(mat_img, cv::Rect(i.x, i.y, i.w, i.h), color, 2);
+//		if (obj_names.size() > i.obj_id) {
+//			std::string obj_name = obj_names[i.obj_id];
+//			if (i.track_id > 0) obj_name += " - " + std::to_string(i.track_id);
+//			cv::Size const text_size = getTextSize(obj_name, cv::FONT_HERSHEY_COMPLEX_SMALL, 1.2, 2, 0);
+//			int const max_width = (text_size.width > i.w + 2) ? text_size.width : (i.w + 2);
+//			cv::rectangle(mat_img, cv::Point2f(std::max((int)i.x - 1, 0), std::max((int)i.y - 30, 0)),
+//				cv::Point2f(std::min((int)i.x + max_width, mat_img.cols - 1), std::min((int)i.y, mat_img.rows - 1)),
+//				color, CV_FILLED, 8, 0);
+//			putText(mat_img, obj_name, cv::Point2f(i.x, i.y - 10), cv::FONT_HERSHEY_COMPLEX_SMALL, 1.2, cv::Scalar(0, 0, 0), 2);
+//		}
+//	}
+//	if (current_det_fps >= 0 && current_cap_fps >= 0) {
+//		std::string fps_str = "FPS detection: " + std::to_string(current_det_fps) + "   FPS capture: " + std::to_string(current_cap_fps);
+//		putText(mat_img, fps_str, cv::Point2f(10, 20), cv::FONT_HERSHEY_COMPLEX_SMALL, 1.2, cv::Scalar(50, 255, 0), 2);
+//	}
+//}
+//#endif	// OPENCV
+//
+//void MotionToColor(CFloatImage motim, CByteImage &colim, float maxmotion)
+//{
+//	CShape sh = motim.Shape();
+//	int width = sh.width, height = sh.height;
+//	colim.ReAllocate(CShape(width, height, 3));
+//	int x, y;
+//	// determine motion range:
+//	float maxx = -999, maxy = -999;
+//	float minx = 999, miny = 999;
+//	float maxrad = -1;
+//	for (y = 0; y < height; y++) {
+//		for (x = 0; x < width; x++) {
+//			float fx = motim.Pixel(x, y, 0);
+//			float fy = motim.Pixel(x, y, 1);
+//			if (unknown_flow(fx, fy))
+//				continue;
+//			maxx = __max(maxx, fx);
+//			maxy = __max(maxy, fy);
+//			minx = __min(minx, fx);
+//			miny = __min(miny, fy);
+//			float rad = sqrt(fx * fx + fy * fy);
+//			maxrad = __max(maxrad, rad);
+//		}
+//	}
+//	printf("max motion: %.4f  motion range: u = %.3f .. %.3f;  v = %.3f .. %.3f\n",
+//		maxrad, minx, maxx, miny, maxy);
+//
+//
+//	if (maxmotion > 0) // i.e., specified on commandline
+//		maxrad = maxmotion;
+//
+//	if (maxrad == 0) // if flow == 0 everywhere
+//		maxrad = 1;
+//
+//	for (y = 0; y < height; y++) {
+//		for (x = 0; x < width; x++) {
+//			float fx = motim.Pixel(x, y, 0);
+//			float fy = motim.Pixel(x, y, 1);
+//			uchar *pix = &colim.Pixel(x, y, 0);
+//			if (unknown_flow(fx, fy)) {
+//				pix[0] = pix[1] = pix[2] = 0;
+//			}
+//			else {
+//				computeColor(fx / maxrad, fy / maxrad, pix);
+//			}
+//		}
+//	}
+//}
 
 /*
 Helper functions
@@ -242,7 +242,7 @@ namespace topviewkinect
 			topviewkinect::util::safe_release(&this->kinect_coordinate_mapper);
 
 			// Stop OpenPose
-			this->op_wrapper.stop();
+			//this->op_wrapper.stop();
 
 			// Free RESTful client
 			delete this->restful_client;
@@ -774,11 +774,11 @@ namespace topviewkinect
 
 			this->android_sensor_mutex.lock();
 			int sensor_data_size = this->android_sensor_data.size();
-			if (sensor_data_size >= 200)
+			if (sensor_data_size >= 210)
 			{
-				for (int i = 0; i < 200; ++i)
+				for (int i = 0; i < 210; ++i)
 				{
-					int index = sensor_data_size - 200 + i;
+					int index = sensor_data_size - 210 + i;
 					android_sensor_sample.push_back(this->android_sensor_data[index]);
 				}
 			}
@@ -975,7 +975,7 @@ namespace topviewkinect
 			float phone_orientation[3] = { 80.258,-179.806,-0.073 };
 
 			// g_w phone gravity
-			float g_w[3] = { -0.012,0.033,-9.807 };
+			float g_w[3] = { -0.012f,0.033f,-9.807f };
 
 			// w_1 = n_w
 			float n_w[3];

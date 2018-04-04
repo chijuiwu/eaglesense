@@ -146,62 +146,69 @@ namespace topviewkinect
 				topviewkinect::util::log_println("Failed to load 'model.fft_features' function !!");
 			}
 
+			PyObject* load_model_res = PyObject_CallMethod(model_module, "load_model", NULL);
+			if (!load_model_res)
+			{
+				topviewkinect::util::log_println("Failed to load 'load_model' function !!");
+			}
+
 			// Clean up
 			Py_INCREF(this->fft_features_func);
 
 			Py_DECREF(sys_module);
 			Py_DECREF(sys_path);
 			Py_DECREF(eaglesense_dir);
-			Py_DECREF(model_module);
+			Py_DECREF(load_model_res);
 
-			PyObject* pickle_module = PyImport_ImportModule("pickle"); // import pickle
-			if (!pickle_module)
-			{
-				topviewkinect::util::log_println("Failed to import pickle !!");
-			}
-			std::cout << "import pickle" << std::endl;
+			//PyObject* pickle_module = PyImport_ImportModule("pickle"); // import pickle
+			//if (!pickle_module)
+			//{
+			//	topviewkinect::util::log_println("Failed to import pickle !!");
+			//}
+			//std::cout << "import pickle" << std::endl;
 
-			PyObject* io_module = PyImport_ImportModule("io"); // import io
-			if (!io_module)
-			{
-				topviewkinect::util::log_println("Failed to import io !!");
-			}
-			std::cout << "import io" << std::endl;
+			//PyObject* io_module = PyImport_ImportModule("io"); // import io
+			//if (!io_module)
+			//{
+			//	topviewkinect::util::log_println("Failed to import io !!");
+			//}
+			//std::cout << "import io" << std::endl;
 
-			PyObject* model_fid = PyObject_CallMethod(io_module, "open", "ss", topviewkinect::get_model_filepath("v2/3-gesture-fft-svm.pkl").c_str(), "rb"); // fid = open("model.pkl")
-			if (!model_fid)
-			{
-				topviewkinect::util::log_println("Failed to open model file !!");
-			}
-			std::cout << "fid = open('model')" << std::endl;
+			//PyObject* model_fid = PyObject_CallMethod(io_module, "open", "ss", topviewkinect::get_model_filepath("v2/3-gesture-xyz-nn-10overlap.pkl").c_str(), "rb"); // fid = open("model.pkl")
+			//if (!model_fid)
+			//{
+			//	topviewkinect::util::log_println("Failed to open model file !!");
+			//}
+			//std::cout << "fid = open('model')" << std::endl;
 
-			PyObject* pickle_load_func = PyObject_GetAttrString(pickle_module, "load"); // pickle.load
-			if (!pickle_load_func)
-			{
-				topviewkinect::util::log_println("Failed to load 'pickle.load' function !!");
-			}
+			//PyObject* pickle_load_func = PyObject_GetAttrString(pickle_module, "load"); // pickle.load
+			//if (!pickle_load_func)
+			//{
+			//	topviewkinect::util::log_println("Failed to load 'pickle.load' function !!");
+			//}
 
-			this->gesture_recognition_phone_model = PyObject_CallFunctionObjArgs(pickle_load_func, model_fid, NULL); // model = pickle.load(fid)
-			if (!this->gesture_recognition_phone_model)
-			{
-				topviewkinect::util::log_println("Failed to load gesture recognition model (via pickle) !!");
-			}
-			std::cout << "model = pickle.load(fid)" << std::endl;
+			//this->gesture_recognition_phone_model = PyObject_CallFunctionObjArgs(pickle_load_func, model_fid, NULL); // model = pickle.load(fid)
+			//if (!this->gesture_recognition_phone_model)
+			//{
+			//	topviewkinect::util::log_println("Failed to load gesture recognition model (via pickle) !!");
+			//}
+			//std::cout << "model = pickle.load(fid)" << std::endl;
 
-			this->gesture_recognition_phone_predict_func = PyObject_GetAttrString(this->gesture_recognition_phone_model, "predict"); // model.predict
+			this->gesture_recognition_phone_predict_func = PyObject_GetAttrString(model_module, "predict"); // model.predict
 			if (!this->gesture_recognition_phone_predict_func)
 			{
 				topviewkinect::util::log_println("Failed to load 'model.load' function !!");
 			}
 
 			// Clean up
-			Py_INCREF(this->gesture_recognition_phone_model);
+			//Py_INCREF(this->gesture_recognition_phone_model);
 			Py_INCREF(this->gesture_recognition_phone_predict_func);
 
-			Py_DECREF(pickle_module);
-			Py_DECREF(io_module);
-			Py_DECREF(model_fid);
-			Py_DECREF(pickle_load_func);
+			Py_DECREF(model_module);
+			//Py_DECREF(pickle_module);
+			//Py_DECREF(io_module);
+			//Py_DECREF(model_fid);
+			//Py_DECREF(pickle_load_func);
 
 			topviewkinect::util::log_println("Gesture Recognition module initialized !");
 			return true;
@@ -283,7 +290,7 @@ namespace topviewkinect
 
 		bool InteractionClassifier::recognize_gesture_phone(std::vector<topviewkinect::AndroidSensorData>& data, int* gesture_type) const
 		{
-			int window_size = 200;
+			int window_size = 210;
 
 			if (data.size() != window_size)
 			{
@@ -294,16 +301,16 @@ namespace topviewkinect
 			double initial_data_arrival_time = data[0].arrival_time;
 
 			// accelerometer x, y, z, and time
-			//const int features_length = (3);
-			const int features_length = (3+1);
+			const int features_length = (3);
+			//const int features_length = (3+1);
 
 			// Create C 2D array
 			double* X_c_array = new double[features_length * window_size];
 			for (int i = 0; i < window_size; ++i)
 			{
 				const topviewkinect::AndroidSensorData data_point = data[i];
-				//std::array<double, features_length> sensor_data_features = { data_point.linear_accel_x, data_point.linear_accel_y, data_point.linear_accel_z};
-				std::array<double, features_length> sensor_data_features = { data_point.linear_accel_x, data_point.linear_accel_y, data_point.linear_accel_z, data_point.arrival_time - initial_data_arrival_time};
+				std::array<double, features_length> sensor_data_features = { data_point.linear_accel_x, data_point.linear_accel_y, data_point.linear_accel_z};
+				//std::array<double, features_length> sensor_data_features = { data_point.linear_accel_x, data_point.linear_accel_y, data_point.linear_accel_z, data_point.arrival_time - initial_data_arrival_time};
 				std::copy(sensor_data_features.begin(), sensor_data_features.end(), X_c_array + i * sensor_data_features.size());
 			}
 
@@ -327,11 +334,11 @@ namespace topviewkinect
 			}
 
 			// FFT Feature extract
-			PyObject* X_fft = PyObject_CallFunctionObjArgs(this->fft_features_func, X_np_array, NULL);
-			PyArrayObject* X_fft_np_array = reinterpret_cast<PyArrayObject*>(X_fft);
+			//PyObject* X_fft = PyObject_CallFunctionObjArgs(this->fft_features_func, X_np_array, NULL);
+			//PyArrayObject* X_fft_np_array = reinterpret_cast<PyArrayObject*>(X_fft);
 
-			//PyObject* y_pred = PyObject_CallFunctionObjArgs(this->gesture_recognition_phone_predict_func, X_np_array, NULL); // y_pred = model.predict(X)
-			PyObject* y_pred = PyObject_CallFunctionObjArgs(this->gesture_recognition_phone_predict_func, X_fft_np_array, NULL); // y_pred = model.predict(X)
+			PyObject* y_pred = PyObject_CallFunctionObjArgs(this->gesture_recognition_phone_predict_func, X_np_array, NULL); // y_pred = model.predict(X)
+			//PyObject* y_pred = PyObject_CallFunctionObjArgs(this->gesture_recognition_phone_predict_func, X_fft_np_array, NULL); // y_pred = model.predict(X)
 			if (!y_pred)
 			{
 				topviewkinect::util::log_println("Failed to call predict function !!");
@@ -343,7 +350,7 @@ namespace topviewkinect
 
 			// Clean up
 			Py_DECREF(X_np_array);
-			Py_DECREF(X_fft);
+			//Py_DECREF(X_fft);
 			Py_DECREF(y_pred);
 
 			return true;

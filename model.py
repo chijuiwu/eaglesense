@@ -1,4 +1,5 @@
 import numpy as np
+import keras
 
 
 def hello_world():
@@ -43,3 +44,17 @@ def fft_features(data):
     data_fft_features = np.array([f_features_extended])
 
     return data_fft_features
+
+
+model = None
+
+
+def load_model():
+    global model
+    model = keras.models.load_model("D:\\p_eaglesense\\eaglesense\\models\\v2\\3-gesture-xyz-nn-overlap.h5")
+
+
+def predict(X):
+    y_pred = model.predict(np.array([X]))
+    y_output = np.array([np.argmax(i) for i in y_pred])
+    return y_output

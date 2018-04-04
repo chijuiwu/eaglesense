@@ -30,12 +30,12 @@ You should have received a copy of the GNU General Public License along with thi
 #include <string>
 #include <vector>
 
-#include "thirdparty/openpose/openpose_wrapper.h"
 #include "topviewkinect/topviewkinect.h"
 #include "topviewkinect/skeleton/skeleton.h"
 #include "topviewkinect/vision/classifier.h"
 #include "topviewkinect/vision/framerate.h"
 #include "topviewkinect/vision/log.h"
+//#include "thirdparty/openpose/openpose_wrapper.h"
 
 //void onMouse(int event, int x, int y);
 //static void onMouse(int event, int x, int y, int, void* userdata);
@@ -78,9 +78,9 @@ namespace topviewkinect
 			cv::Mat compute_optical_flow(const cv::Mat& src_prev, const cv::Mat& src_next, cv::Mat& viz, const char* name);
 
 			// OpenPose wrapper
-			op::Wrapper<std::vector<thirdparty::openpose::UserDatum>> op_wrapper{ op::ThreadManagerMode::Asynchronous };
-			bool op_processing;
-			std::vector<thirdparty::openpose::Skeleton> op_skeletons;
+			//op::Wrapper<std::vector<thirdparty::openpose::UserDatum>> op_wrapper{ op::ThreadManagerMode::Asynchronous };
+			//bool op_processing;
+			//std::vector<thirdparty::openpose::Skeleton> op_skeletons;
 
             // Background extraction
             int current_num_background_frames;

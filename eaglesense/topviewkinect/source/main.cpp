@@ -341,7 +341,7 @@ int main(int argc, char* argv[])
 
 static int start()
 {
-		topviewkinect::util::log_println("Tracking ...");
+	topviewkinect::util::log_println("Tracking ...");
 
 	// Create interactive space
 	topviewkinect::vision::TopViewSpace m_space;
