@@ -1,7 +1,7 @@
 {
     "tracking": {
         "framerate": 1,
-        "orientation_recognition": 1,
+        "orientation_recognition": 0,
         "interaction_recognition": 1,
         "restful_connection": 0
     },

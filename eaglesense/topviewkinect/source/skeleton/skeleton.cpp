@@ -66,6 +66,16 @@ namespace topviewkinect
         }
 
         // Body
+		const cv::Rect Skeleton::get_body_bounding_rect() const
+		{
+			return this->body_bounding_rect;
+		}
+
+		void Skeleton::set_body_bounding_rect(const cv::Rect& body_bounding_rect)
+		{
+			this->body_bounding_rect = body_bounding_rect;
+		}
+
         const Joint Skeleton::get_body_center() const
         {
             return this->body_center;
@@ -263,6 +273,17 @@ namespace topviewkinect
             this->f_body_extremities = f_body_extremities;
             this->f_body_extremities_infrareds = f_body_extremities_infrareds;
         }
+
+		// Device
+		const cv::Point Skeleton::get_device_center() const
+		{
+			return this->device_center;
+		}
+
+		void Skeleton::set_device_center(const cv::Point& device_center)
+		{
+			this->device_center = device_center;
+		}
 
         // Visualizations
         cv::Mat Skeleton::get_mask() const

@@ -274,7 +274,7 @@ namespace topviewkinect
 			}
 		}
 
-		void InteractionLog::output_skeleton_features(const int frame_id, const std::vector<topviewkinect::skeleton::Skeleton>& skeletons, const bool keep_label)
+		void InteractionLog::output_skeleton_features(const int frame_id, const std::vector<topviewkinect::skeleton::Skeleton>& skeletons, const int dataset_label, const bool keep_label)
 		{
 			for (const topviewkinect::skeleton::Skeleton& skeleton : skeletons)
 			{
@@ -296,7 +296,7 @@ namespace topviewkinect
 				// Label
 				if (!keep_label)
 				{
-					this->labels_csv << frame_id << "," << skeleton.get_id() << ",-1," << std::setprecision(2) << head.orientation << ",-1\n";
+					this->labels_csv << frame_id << "," << skeleton.get_id() << "," << dataset_label << "," << std::setprecision(2) << head.orientation << ",-1\n";
 				}
 			}
 

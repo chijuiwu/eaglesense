@@ -41,6 +41,7 @@ namespace topviewkinect
             bool activity_tracked = false;
 
             // Body
+			cv::Rect body_bounding_rect;
             Joint body_center;
             Joint head;
             std::vector<cv::Point> contour;
@@ -67,6 +68,9 @@ namespace topviewkinect
             std::array<double, topviewkinect::vision::FEATURE_NUM_BODY_EXTREMITIES> f_body_extremities;
             std::array<double, topviewkinect::vision::FEATURE_NUM_BODY_EXTREMITIES_INFRAREDS> f_body_extremities_infrareds;
 
+			// Device
+			cv::Point device_center;
+
             // Visualizations
             cv::Mat mask;
             cv::Mat depth_frame;
@@ -90,6 +94,8 @@ namespace topviewkinect
             double width;
             double height;
 
+			const cv::Rect get_body_bounding_rect() const;
+			void set_body_bounding_rect(const cv::Rect& rect);
             const Joint get_body_center() const;
             void set_body_center(const Joint& body_center);
             const std::vector<cv::Point> get_contour() const;
@@ -125,6 +131,9 @@ namespace topviewkinect
 
             const std::array<double, topviewkinect::vision::NUM_FEATURES> get_features() const;
             void set_features(const std::array<double, topviewkinect::vision::FEATURE_NUM_LAYER_AREAS>& f_layer_areas, const std::array<double, topviewkinect::vision::FEATURE_NUM_LAYER_CONTOURS>& f_layer_contours, const std::array<double, topviewkinect::vision::FEATURE_NUM_LAYER_DISTANCES>& f_layer_distances, const std::array<double, topviewkinect::vision::FEATURE_NUM_INTRALAYER_POSITIONS>& f_intralayer_positions, const std::array<double, topviewkinect::vision::FEATURE_NUM_INTERLAYER_POSITIONS>& f_interlayer_positions, const std::array<double, topviewkinect::vision::FEATURE_NUM_BODY_EXTREMITIES>& f_body_extremities, const std::array<double, topviewkinect::vision::FEATURE_NUM_BODY_EXTREMITIES_INFRAREDS>& f_body_extremities_infrareds);
+
+			const cv::Point get_device_center() const;
+			void set_device_center(const cv::Point& device_center);
 
             // Visualizations
             cv::Mat get_mask() const;

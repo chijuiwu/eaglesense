@@ -31,6 +31,7 @@ namespace topviewkinect
 
     std::string get_dataset_directory(const int dataset_id)
     {
+		//return EAGLESENSE_DIRECTORY + "/../eaglesense-exp/data/topviewkinect/" + std::to_string(dataset_id);
         return EAGLESENSE_DIRECTORY + "/data/topviewkinect/" + std::to_string(dataset_id);
     }
     

@@ -120,7 +120,6 @@ namespace topviewkinect
         bool TopViewSpace::initialize()
         {
             topviewkinect::util::log_println("Initializing...");
-
             try
             {
                 boost::property_tree::ptree config_root;
@@ -515,6 +514,10 @@ namespace topviewkinect
                 topviewkinect::util::log_println("Failed to create dataset.");
                 return false;
             }
+			else
+			{
+				topviewkinect::util::log_println("Dataset created.");
+			}
 
             return true;
         }
@@ -539,7 +542,7 @@ namespace topviewkinect
             return true;
         }
 
-        void TopViewSpace::postprocess(const std::string& dataset_name, const bool keep_label)
+        void TopViewSpace::postprocess(const std::string& dataset_name, const int dataset_label, const bool keep_label)
         {
             // Postprocessed data files
             this->interaction_log.create_postprocessed_files(keep_label);
@@ -559,7 +562,7 @@ namespace topviewkinect
                 this->apply_kinect_multisource_frame(kv.first, depth_frame, infrared_frame); // process
                 if (current_frame_idx >= topviewkinect::vision::REQUIRED_BACKGROUND_FRAMES)  // output real data
                 {
-                    this->interaction_log.output_skeleton_features(this->kinect_frame_id, this->skeletons, keep_label);
+                    this->interaction_log.output_skeleton_features(this->kinect_frame_id, this->skeletons, dataset_label, keep_label);
                 }
 
                 // Show progress
@@ -671,21 +674,26 @@ namespace topviewkinect
 						const topviewkinect::skeleton::Joint skeleton_head = skeleton.get_head();
 						const topviewkinect::skeleton::Joint skeleton_center = skeleton.get_body_center();
 
-                        // Head
-                        cv::Point head_pt = cv::Point(skeleton_head.x, skeleton_head.y);
-                        cv::circle(this->visualization_frame, head_pt, 3, topviewkinect::color::CV_BGR_WHITE, -1);
-
                         // Activity and device
                         if (this->configuration.interaction_recognition)
                         {
 							cv::Rect activity_rect = cv::Rect(skeleton_center.x - 70, skeleton_center.y, 160, 50);
 							cv::rectangle(this->visualization_frame, activity_rect, topviewkinect::color::CV_BGR_BLACK, -1);
                             cv::putText(this->visualization_frame, skeleton.get_activity(), cv::Point(skeleton_center.x - 60, skeleton_center.y + 30), cv::FONT_HERSHEY_COMPLEX, 1, topviewkinect::color::CV_BGR_WHITE, 2);
-                        }
+                        
+							//// Phone or Tablet
+							//int activity_id = skeleton.get_activity_id();
+							//if (activity_id == 3 || activity_id == 4)
+							//{
+							//	cv::circle(this->visualization_frame, skeleton.get_device_center(), 5, color::CV_BGR_RED, 2, -1);
+							//}
+						}
 
-						// Orientation
+						// Head orientation
 						if (this->configuration.orientation_recognition && skeleton.is_activity_tracked())
 						{
+							cv::Point head_pt = cv::Point(skeleton_head.x, skeleton_head.y);
+							cv::circle(this->visualization_frame, head_pt, 3, topviewkinect::color::CV_BGR_WHITE, -1);
 							int head_angle_pt_x = boost::math::iround(skeleton_head.x + 50 * std::cos(skeleton_head.orientation * CV_PI / 180.0));
 							int head_angle_pt_y = boost::math::iround(skeleton_head.y + 50 * std::sin(skeleton_head.orientation * CV_PI / 180.0));
 							cv::Point head_angle_pt = cv::Point(head_angle_pt_x, head_angle_pt_y);
@@ -757,6 +765,13 @@ namespace topviewkinect
             }
         }
 
+		void TopViewSpace::find_mass_center(const std::vector<cv::Point>& contour, cv::Point2d& center) const
+		{
+			cv::Moments contour_moments = cv::moments(contour, true);
+			center.x = contour_moments.m10 / contour_moments.m00;
+			center.y = contour_moments.m01 / contour_moments.m00;
+		}
+
         void TopViewSpace::find_mass_center(const cv::Mat& src, const std::vector<cv::Point>& contour, topviewkinect::skeleton::Joint& center) const
         {
             cv::Moments contour_moments = cv::moments(contour, true);
@@ -808,7 +823,7 @@ namespace topviewkinect
             // Invalidate all skeletons
             std::for_each(this->skeletons.begin(), this->skeletons.end(), [](topviewkinect::skeleton::Skeleton& skeleton) { skeleton.set_updated(false); });
 
-            // Find new skeletons (contours w/ sufficient size)
+            // Find new skeletons (contours with sufficient size)
             std::vector<std::tuple<int, topviewkinect::skeleton::Joint>> new_skeleton_contours; // <contour index, contour center>
 
             std::vector<std::vector<cv::Point>> foreground_contours;
@@ -836,7 +851,6 @@ namespace topviewkinect
             }
 
             // Match skeletons based on center of mass
-
             std::vector<std::tuple<int, int>> skeleton_matches; // skeleton <skeleton id, contour index>
             if (this->skeletons.size() <= new_skeleton_contours.size()) // more new skeletons
             {
@@ -942,6 +956,7 @@ namespace topviewkinect
 
                 // Depth silhouette
                 cv::Rect skeleton_bounding_rect = cv::boundingRect(skeleton_contour);
+				skeleton.set_body_bounding_rect(skeleton_bounding_rect);
                 cv::Mat skeleton_depth_silhouette = skeleton_depth_frame(skeleton_bounding_rect);
                 skeleton_depth_silhouette.setTo(0, skeleton_depth_silhouette == 255);
                 cv::medianBlur(skeleton_depth_silhouette, skeleton_depth_silhouette, 3);
@@ -1141,8 +1156,8 @@ namespace topviewkinect
                 for (int i = 0; i < skeleton_head_contour.size(); ++i)
                 {
                     const cv::Point head_contour_pt = skeleton_head_contour[i];
-                    int scaledup_x = boost::math::iround((head_contour_pt.x - 5) * static_cast<float>(skeleton_depth_silhouette.cols) / 32);
-                    int scaledup_y = boost::math::iround((head_contour_pt.y - 5) * static_cast<float>(skeleton_depth_silhouette.rows) / 32);
+                    int scaledup_x = boost::math::iround((head_contour_pt.x - 5) * static_cast<double>(skeleton_depth_silhouette.cols) / 32.0);
+                    int scaledup_y = boost::math::iround((head_contour_pt.y - 5) * static_cast<double>(skeleton_depth_silhouette.rows) / 32.0);
                     if (scaledup_x < 0 || scaledup_x > skeleton_depth_silhouette.cols || scaledup_y < 0 || scaledup_y > skeleton_depth_silhouette.rows)
                     {
                         continue;
@@ -1602,59 +1617,79 @@ namespace topviewkinect
                     std::copy(body_bottom_postion.begin(), body_bottom_postion.end(), f_interlayer_positions.begin() + i * 6 + 3);
                 }
 
-                cv::Mat infrared_silhouette_mask = cv::Mat::zeros(skeleton_depth_silhouette.size(), CV_8UC1);
-                skeleton_infrared_silhouette.copyTo(infrared_silhouette_mask, head_mask_dilated);
+                cv::Mat skeleton_infrared_silhouette_outline = cv::Mat::zeros(skeleton_depth_silhouette.size(), CV_8UC1);
+                skeleton_infrared_silhouette.copyTo(skeleton_infrared_silhouette_outline, head_mask_dilated);
                 cv::Mat others_mask_dilated_inv;
                 cv::threshold(others_mask_dilated, others_mask_dilated_inv, 0, 255, CV_THRESH_BINARY_INV);
-                infrared_silhouette_mask.setTo(0, others_mask_dilated_inv);
+                skeleton_infrared_silhouette_outline.setTo(0, others_mask_dilated_inv);
 
                 // F. Body extremities depths and infrareds
                 f_body_extremities[0] = static_cast<double>(body_convexity_extremities.size());
 
                 // Ensure enough space
-                cv::Mat extreme_infrared_area_padded_16;
-                cv::copyMakeBorder(infrared_silhouette_mask, extreme_infrared_area_padded_16, 16, 16, 16, 16, cv::BORDER_CONSTANT, 0);
-                cv::Mat extreme_infrared_area_mask_16 = cv::Mat::zeros(extreme_infrared_area_padded_16.size(), CV_8UC1);
-                cv::Mat extreme_infrared_area_16 = cv::Mat::zeros(extreme_infrared_area_padded_16.size(), CV_8UC1);
-                cv::Mat extreme_infrared_area_16_total = cv::Mat::zeros(extreme_infrared_area_padded_16.size(), CV_8UC1);
-                //cv::Mat extreme_infrared_colors = cv::Mat::zeros(extreme_infrared_area_padded_16.size(), CV_8UC3);
+                cv::Mat skeleton_infrared_silhouette_outline_padded;
+                cv::copyMakeBorder(skeleton_infrared_silhouette_outline, skeleton_infrared_silhouette_outline_padded, 16, 16, 16, 16, cv::BORDER_CONSTANT, 0);
+				
+				cv::Mat extremities_infrared = cv::Mat::zeros(skeleton_infrared_silhouette_outline_padded.size(), CV_8UC1);
+				cv::Mat extremities_infrared_colors = cv::Mat::zeros(skeleton_infrared_silhouette_outline_padded.size(), CV_8UC3);
 
+				cv::Mat pt_infrared_area = cv::Mat::zeros(skeleton_infrared_silhouette_outline_padded.size(), CV_8UC1);
+				cv::Mat pt_infrared_area_mask = cv::Mat::zeros(skeleton_infrared_silhouette_outline_padded.size(), CV_8UC1);
+
+				std::vector<cv::Point> max_contour;
+				double max_area = 0;
                 for (int i = 0; i < body_convexity_extremities.size(); ++i)
                 {
                     const topviewkinect::skeleton::Joint convexity_extreme_pt = body_convexity_extremities[i];
 
                     // Infrared area
-                    extreme_infrared_area_mask_16.setTo(0);
-                    cv::Rect object_infrared_roi_16(convexity_extreme_pt.x - 8 + 16, convexity_extreme_pt.y - 8 + 16, 16, 16);
-                    cv::rectangle(extreme_infrared_area_mask_16, object_infrared_roi_16, 255, -1);
-                    extreme_infrared_area_16.setTo(0);
-                    extreme_infrared_area_padded_16.copyTo(extreme_infrared_area_16, extreme_infrared_area_mask_16);
-                    extreme_infrared_area_padded_16.copyTo(extreme_infrared_area_16_total, extreme_infrared_area_mask_16);
-                    std::vector<cv::Point> infrared_contour;
-                    double infrared_contour_area;
-                    this->find_largest_contour(extreme_infrared_area_16, infrared_contour, &infrared_contour_area);
-                    f_body_extremities_infrareds[i] = infrared_contour_area;
+					cv::Rect pt_infrared_roi_16(convexity_extreme_pt.x - 8 + 16, convexity_extreme_pt.y - 8 + 16, 16, 16);
+                    pt_infrared_area_mask.setTo(0);
+                    cv::rectangle(pt_infrared_area_mask, pt_infrared_roi_16, 255, -1);
+					//cv::imshow(std::to_string(i) + " mask", pt_infrared_area_mask);
+                    
+					pt_infrared_area.setTo(0);
+                    skeleton_infrared_silhouette_outline_padded.copyTo(pt_infrared_area, pt_infrared_area_mask);
+                    skeleton_infrared_silhouette_outline_padded.copyTo(extremities_infrared, pt_infrared_area_mask);
+
+					std::vector<cv::Point> pt_infrared_contour;
+                    double pt_infrared_contour_area;
+                    this->find_largest_contour(pt_infrared_area, pt_infrared_contour, &pt_infrared_contour_area);
+                    f_body_extremities_infrareds[i] = pt_infrared_contour_area;
+
+					if (pt_infrared_contour_area > max_area)
+					{
+						max_area = pt_infrared_contour_area;
+						max_contour = pt_infrared_contour;
+					}
 
                     //std::cout << i << " - area: " << extreme_infrared_areas[i] << std::endl;
                     //cv::threshold(extreme_infrared_area, extreme_infrared_area, 0, 255, CV_THRESH_BINARY);
-                    //cv::imshow(std::to_string(i) + " area", extreme_infrared_area);
-                    //extreme_infrared_colors.setTo(0);
-                    //cv::rectangle(extreme_infrared_colors, object_infrared_roi_16, common_colors::CV_BGR_WHITE, 1);
-                    //extreme_infrared_colors.setTo(common_colors::CV_BGR_RED, extreme_infrared_area_16);
+                    //cv::imshow(std::to_string(i) + " area", pt_infrared_area);
+                    //cv::rectangle(extremities_infrared_colors, pt_infrared_roi_16, color::CV_BGR_WHITE, 1);
+                    //extremities_infrared_colors.setTo(color::CV_BGR_RED, pt_infrared_area);
                 }
-                std::vector<cv::Point> largest_infrared_contour;
-                double largest_infrared_contour_area;
-                this->find_largest_contour(extreme_infrared_area_16_total, largest_infrared_contour, &largest_infrared_contour_area);
-                f_body_extremities_infrareds[5] = largest_infrared_contour_area;
+                std::vector<cv::Point> whole_extremities_contour;
+                double whole_extremities_contour_area;
+                this->find_largest_contour(extremities_infrared, whole_extremities_contour, &whole_extremities_contour_area);
+                f_body_extremities_infrareds[5] = whole_extremities_contour_area;
 
-                //cv::Mat largest_infrared_contour_mask = cv::Mat::zeros(extreme_infrared_area_padded_16.size(), CV_8UC1);
+                //cv::Mat largest_infrared_contour_mask = cv::Mat::zeros(skeleton_infrared_silhouette_outline_padded.size(), CV_8UC1);
                 //cv::drawContours(largest_infrared_contour_mask, std::vector<std::vector<cv::Point>>{largest_infrared_contour}, 0, 255, -1);
                 //std::cout << "size: " << f_body_extremities_infrareds[0] << std::endl;
-                //cv::imshow("infrareds", extreme_infrared_colors);
+                //cv::imshow("extremities area (color)", extremities_infrared_colors);
                 //cv::imwrite("E:\\eaglesense\\data\\topviewkinect\\2010\\depth\\paper\\figs\\new\\_infrareds.png", extreme_infrared_colors);
 
                 // Update features
                 skeleton.set_features(f_layer_areas, f_layer_contours, f_layer_distances, f_intralayer_positions, f_interlayer_positions, f_body_extremities, f_body_extremities_infrareds);
+
+				// Device
+				//cv::Point2d device_center;
+				//this->find_mass_center(max_contour, device_center);
+				//cv::Rect body_bounding_rect = skeleton.get_body_bounding_rect();
+				//int device_center_x = boost::math::iround((device_center.x - 16 - 5) * static_cast<double>(skeleton_depth_silhouette.cols) / 32.0 + body_bounding_rect.x);
+				//int device_center_y = boost::math::iround((device_center.y - 16 - 5) * static_cast<double>(skeleton_depth_silhouette.rows) / 32.0 + body_bounding_rect.y);
+				//skeleton.set_device_center(cv::Point(device_center_x, device_center_y));
             }
         }
 
@@ -1707,7 +1742,12 @@ namespace topviewkinect
             return this->depth_frame.clone();
         }
 
-        cv::Mat TopViewSpace::get_infrared_frame() const
+		cv::Mat TopViewSpace::get_infrared_frame() const
+		{
+			return this->infrared_frame.clone();
+		}
+
+        cv::Mat TopViewSpace::get_low_infrared_frame() const
         {
             return this->low_infrared_frame.clone();
         }

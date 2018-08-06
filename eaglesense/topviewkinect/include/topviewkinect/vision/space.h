@@ -82,6 +82,7 @@ namespace topviewkinect
             const double relative_2d_distance(const topviewkinect::skeleton::Joint& joint1, const topviewkinect::skeleton::Joint& joint2) const;
             void find_largest_contour(const cv::Mat& src, std::vector<cv::Point>& largest_contour, double* largest_area = 0) const;
             void find_mass_center(const cv::Mat& src, const std::vector<cv::Point>& contour, topviewkinect::skeleton::Joint& center) const;
+			void find_mass_center(const std::vector<cv::Point>& contour, cv::Point2d& center) const;
             void find_contour_centers(const cv::Mat& src, std::vector<std::tuple<topviewkinect::skeleton::Joint, double, double>>& contours_centers) const;
             void find_furthest_points(const cv::Mat& src, cv::Point& pt1, cv::Point& pt2, double* largest_distance) const;
             void find_furthest_points(const std::vector<cv::Point>& contour, cv::Point& pt1, cv::Point& pt2, double* largest_distance) const;
@@ -113,11 +114,12 @@ namespace topviewkinect
             bool save_visualization();
 
             // Postprocess
-            void postprocess(const std::string& dataset_name, const bool keep_label);
+            void postprocess(const std::string& dataset_name, const int dataset_label, const bool keep_label);
 
             // Visualizations
             cv::Mat get_depth_frame() const;
             cv::Mat get_infrared_frame() const;
+			cv::Mat get_low_infrared_frame() const;
             cv::Mat get_rgb_frame() const;
             cv::Mat get_visualization_frame() const;
         };

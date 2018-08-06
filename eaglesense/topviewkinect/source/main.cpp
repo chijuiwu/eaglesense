@@ -1,6 +1,6 @@
 
 /**
-EagleSense top-view tracking application
+EagleSense
 
 ===
 EagleSense: Tracking People and Devices in Interactive Spaces using Real-Time Top-View Depth-Sensing
@@ -30,13 +30,14 @@ You should have received a copy of the GNU General Public License along with thi
 
 static constexpr const char* DEPTH_WINDOW_NAME = "Top-View Kinect Depth";
 static constexpr const char* INFRARED_WINDOW_NAME = "Top-View Kinect Infrared";
+static constexpr const char* INFRARED_LOW_WINDOW_NAME = "Top-View Kinect Infrared (Low)";
 static constexpr const char* RGB_WINDOW_NAME = "Top-View Kinect RGB";
 static constexpr const char* SPACE_WINDOW_NAME = "Top-View Interactive Space";
 
 static int start();
 static int replay(const int dataset_id);
 static int capture(const int dataset_id);
-static int postprocess(const int dataset_id, const std::string& dataset_name, const bool keep_label);
+static int postprocess(const int dataset_id, const std::string& dataset_name, const int dataset_label, const bool keep_label);
 
 int main(int argc, char* argv[])
 {
@@ -65,13 +66,15 @@ int main(int argc, char* argv[])
     boost::program_options::options_description advanced_opts("Advanced (working with datasets)");
     int dataset_id;
     std::string dataset_name;
+	int dataset_label = -1;
     advanced_opts.add_options()
         ("replay,r", "Replay")
         ("capture,c", "Capture")
         ("postprocess,p", "Postprocess")
         ("keep_label,k", "Keep labels during postprocessing")
         ("dataset_id,d", boost::program_options::value<int>(&dataset_id), "Dataset ID (required)")
-        ("dataset_name,n", boost::program_options::value<std::string>(&dataset_name)->default_value("Untitled"), "Dataset name");
+        ("dataset_name,n", boost::program_options::value<std::string>(&dataset_name)->default_value("Untitled"), "Dataset name")
+        ("dataset_label,l", boost::program_options::value<int>(&dataset_label), "Dataset label");
 
     all_opts.add(general_opts).add(advanced_opts);
 
@@ -127,7 +130,7 @@ int main(int argc, char* argv[])
     if (program_options.count("postprocess"))
     {
         bool keep_label = program_options.count("keep_label") == 1;
-        return postprocess(dataset_id, dataset_name, keep_label);
+        return postprocess(dataset_id, dataset_name, dataset_label, keep_label);
     }
 
     return EXIT_SUCCESS;
@@ -216,6 +219,7 @@ static int replay(const int dataset_id)
     {
         cv::Mat depth_frame = m_space.get_depth_frame();
         cv::Mat infrared_frame = m_space.get_infrared_frame();
+		cv::Mat infrared_low_frame = m_space.get_low_infrared_frame();
         cv::Mat visualization_frame = m_space.get_visualization_frame();
 		cv::resize(visualization_frame, visualization_frame_enlarged, visualization_frame_enlarged.size(), 0, 0, cv::INTER_LINEAR);
 
@@ -226,6 +230,7 @@ static int replay(const int dataset_id)
         cv::putText(visualization_frame_enlarged, std::to_string(frame_id), cv::Point(20, 20), cv::FONT_HERSHEY_SIMPLEX, 0.3, topviewkinect::color::CV_BGR_WHITE);
         cv::imshow(DEPTH_WINDOW_NAME, depth_frame);
         cv::imshow(INFRARED_WINDOW_NAME, infrared_frame);
+		cv::imshow(INFRARED_LOW_WINDOW_NAME, infrared_low_frame);
         cv::imshow(SPACE_WINDOW_NAME, visualization_frame_enlarged);
 
         // Windows
@@ -278,6 +283,7 @@ static int capture(const int dataset_id)
     {
         cv::imshow(DEPTH_WINDOW_NAME, m_space.get_depth_frame());
         cv::imshow(INFRARED_WINDOW_NAME, m_space.get_infrared_frame());
+		cv::imshow(INFRARED_LOW_WINDOW_NAME, m_space.get_low_infrared_frame());
         cv::imshow(SPACE_WINDOW_NAME, m_space.get_visualization_frame());
 
         int ascii_keypress = cv::waitKey(30); // 30 fps
@@ -298,7 +304,7 @@ static int capture(const int dataset_id)
     return EXIT_SUCCESS;
 }
 
-static int postprocess(const int dataset_id, const std::string& dataset_name, const bool keep_label)
+static int postprocess(const int dataset_id, const std::string& dataset_name, const int dataset_label, const bool keep_label)
 {
     std::string info;
     keep_label ? info = "(keep labels)" : "";
@@ -317,7 +323,7 @@ static int postprocess(const int dataset_id, const std::string& dataset_name, co
     }
 
     // Postprocess
-    m_space.postprocess(dataset_name, keep_label);
+    m_space.postprocess(dataset_name, dataset_label, keep_label);
 
     topviewkinect::util::log_println("Done!");
     return EXIT_SUCCESS;
